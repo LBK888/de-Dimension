@@ -89,6 +89,10 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--cvd-proof", action="store_true",
                      help="also export colour-vision-deficiency and greyscale "
                           "versions of the leading figures")
+    run.add_argument("--translation", default=None, choices=["zh_TW", "none"],
+                     help="the translation written after the English report "
+                          "(default zh_TW, Traditional Chinese; 'none' for English "
+                          "only). Figures and table contents stay in English.")
     run.add_argument("--no-tsne", action="store_true")
     run.add_argument("--no-umap", action="store_true")
     run.add_argument("--no-mp4", action="store_true")
@@ -206,6 +210,8 @@ def cmd_run(args) -> int:
     st.random_state = args.seed
 
     cfg.report.profile = args.report
+    if args.translation is not None:
+        cfg.report.translation = "" if args.translation == "none" else args.translation
     cfg.figure.cvd_proof = args.cvd_proof
     cfg.export.out_dir = Path(args.out)
     cfg.export.mp4 = not args.no_mp4

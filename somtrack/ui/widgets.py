@@ -17,7 +17,29 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout,
                                QWidget)
 
+from ..i18n import language, render, tr
+
 ACCENT = "#0072B2"
+
+
+def none_text() -> str:
+    """The "(none)" entry of a column picker, in the interface language."""
+    return tr("(none)")
+
+
+def is_none_text(text: str) -> bool:
+    return text in ("", "(none)", none_text())
+
+
+def cjk_families(first: str) -> list[str]:
+    """``first`` followed by fonts that carry Traditional-Chinese glyphs.
+
+    Qt falls back to *some* CJK font on its own, but on Windows that can be a
+    Simplified-Chinese face, whose glyph shapes differ from the ones a Taiwanese
+    reader expects.  Naming the Traditional faces keeps the choice deliberate.
+    """
+    return [first, "Microsoft JhengHei UI", "Microsoft JhengHei", "PingFang TC",
+            "Noto Sans CJK TC", "Noto Sans TC"]
 
 
 # --------------------------------------------------------------------------
@@ -57,9 +79,9 @@ class FileListWidget(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
 
         row = QHBoxLayout()
-        self.add_btn = QPushButton("Add files...")
-        self.remove_btn = QPushButton("Remove selected")
-        self.clear_btn = QPushButton("Clear")
+        self.add_btn = QPushButton(tr("Add files..."))
+        self.remove_btn = QPushButton(tr("Remove selected"))
+        self.clear_btn = QPushButton(tr("Clear"))
         for b in (self.add_btn, self.remove_btn, self.clear_btn):
             row.addWidget(b)
         row.addStretch(1)
@@ -67,7 +89,7 @@ class FileListWidget(QWidget):
 
         self.tree = QTreeWidget()
         self.tree.setColumnCount(3)
-        self.tree.setHeaderLabels(["File", "Group (treatment)", "Replicate"])
+        self.tree.setHeaderLabels([tr("File"), tr("Group (treatment)"), tr("Replicate")])
         self.tree.setRootIsDecorated(False)
         self.tree.setAlternatingRowColors(True)
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -78,10 +100,10 @@ class FileListWidget(QWidget):
         self.tree.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked
                                   | QAbstractItemView.EditTrigger.SelectedClicked)
         lay.addWidget(self.tree, 1)
-        lay.addWidget(hint("Group and replicate are guessed from the file name; "
-                           "double-click a cell to correct it. Files sharing a group "
-                           "are one treatment; the replicate number separates repeats "
-                           "of that treatment."))
+        lay.addWidget(hint(tr("Group and replicate are guessed from the file name; "
+                              "double-click a cell to correct it. Files sharing a "
+                              "group are one treatment; the replicate number "
+                              "separates repeats of that treatment.")))
 
         self.add_btn.clicked.connect(self._browse)
         self.remove_btn.clicked.connect(self._remove)
@@ -102,8 +124,9 @@ class FileListWidget(QWidget):
     # -------------------------------------------------- api
     def _browse(self):
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "Select coordinate tables", "",
-            "Tables (*.csv *.tsv *.txt *.xls *.xlsx *.xlsm);;All files (*)")
+            self, tr("Select coordinate tables"), "",
+            tr("Tables") + " (*.csv *.tsv *.txt *.xls *.xlsx *.xlsm);;"
+            + tr("All files") + " (*)")
         self.add_paths(paths)
 
     def add_paths(self, paths: list[str]):
@@ -167,7 +190,7 @@ class ColumnMapWidget(QGroupBox):
     changed = Signal()
 
     def __init__(self, parent=None):
-        super().__init__("Column mapping", parent)
+        super().__init__(tr("Column mapping"), parent)
         self.combos: dict[str, QComboBox] = {}
         form = QFormLayout(self)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
@@ -176,7 +199,7 @@ class ColumnMapWidget(QGroupBox):
             cb.setMinimumWidth(230)
             cb.currentTextChanged.connect(lambda *_: self.changed.emit())
             self.combos[key] = cb
-            lab = QLabel(label + (" *" if required else ""))
+            lab = QLabel(tr(label) + (" *" if required else ""))
             if required:
                 lab.setStyleSheet(f"color:{ACCENT};")
             form.addRow(lab, cb)
@@ -185,10 +208,14 @@ class ColumnMapWidget(QGroupBox):
         for key, cb in self.combos.items():
             cb.blockSignals(True)
             cb.clear()
-            cb.addItem("(none)")
-            cb.addItems(columns)
+            # the column name travels as item data, so the "(none)" entry can be
+            # shown in any language without being mistaken for a column
+            cb.addItem(none_text(), "")
+            for c in columns:
+                cb.addItem(str(c), str(c))
             value = getattr(detected, key, None)
-            cb.setCurrentText(value if value in columns else "(none)")
+            i = cb.findData(value) if value in columns else 0
+            cb.setCurrentIndex(max(i, 0))
             cb.blockSignals(False)
         self.changed.emit()
 
@@ -197,8 +224,8 @@ class ColumnMapWidget(QGroupBox):
 
         cm = SpotColumnMap()
         for key, cb in self.combos.items():
-            txt = cb.currentText()
-            setattr(cm, key, None if txt == "(none)" else txt)
+            txt = cb.currentData()
+            setattr(cm, key, txt or None)
         cm.track = cm.track or ""
         cm.x = cm.x or ""
         cm.y = cm.y or ""
@@ -215,7 +242,7 @@ class MetricTree(QTreeWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setColumnCount(3)
-        self.setHeaderLabels(["Metric", "Unit", "What it measures"])
+        self.setHeaderLabels([tr("Metric"), tr("Unit"), tr("What it measures")])
         self.setAlternatingRowColors(True)
         self.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
@@ -237,7 +264,7 @@ class MetricTree(QTreeWidget):
             usable = [s for s in specs if s.name in available]
             if not usable:
                 continue
-            parent = QTreeWidgetItem([category, "", ""])
+            parent = QTreeWidgetItem([tr(category), "", ""])
             parent.setFlags(parent.flags() | Qt.ItemFlag.ItemIsUserCheckable
                             | Qt.ItemFlag.ItemIsAutoTristate)
             f = parent.font(0)
@@ -245,16 +272,23 @@ class MetricTree(QTreeWidget):
             parent.setFont(0, f)
             self.addTopLevelItem(parent)
             for spec in usable:
+                # The first column is the column name the metric gets in every
+                # output table, so it stays as it is; a translated interface
+                # puts the translated metric name in front of the description.
+                description = tr(spec.description)
+                if language() != "en":
+                    description = f"{tr(spec.label)}：{description}"
                 child = QTreeWidgetItem([
                     spec.name + ("  (v1.2)" if spec.legacy else ""),
                     spec.formatted_unit(length_unit, time_unit),
-                    spec.description,
+                    description,
                 ])
                 child.setFlags(child.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 on = spec.default if preselect is None else (spec.name in preselect)
                 child.setCheckState(0, Qt.CheckState.Checked if on
                                     else Qt.CheckState.Unchecked)
-                child.setToolTip(2, spec.description)
+                child.setToolTip(0, tr(spec.label))
+                child.setToolTip(2, description)
                 child.setData(0, Qt.ItemDataRole.UserRole, spec.name)
                 parent.addChild(child)
             parent.setExpanded(True)
@@ -388,7 +422,7 @@ class FigureGallery(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
 
         left = QVBoxLayout()
-        left.addWidget(QLabel("Figures"))
+        left.addWidget(QLabel(tr("Figures")))
         self.list = QListWidget()
         self.list.setMaximumWidth(250)
         self.list.currentRowChanged.connect(self._show)
@@ -407,10 +441,17 @@ class FigureGallery(QWidget):
         self._panels: list = []
         self._canvas = None
 
-    def set_panels(self, panels: list) -> None:
+    def set_panels(self, panels: list, captions: dict | None = None) -> None:
+        """Show ``(name, panel)`` pairs; ``captions`` adds each figure's legend
+        (圖說) as a tooltip, in the interface language."""
         self.clear()
         self._panels = list(panels)
-        self.list.addItems([name for name, _ in self._panels])
+        for name, _ in self._panels:
+            item = QListWidgetItem(name)
+            caption = (captions or {}).get(name)
+            if caption:
+                item.setToolTip(render(caption))
+            self.list.addItem(item)
         if self._panels:
             self.list.setCurrentRow(0)
 
@@ -456,19 +497,20 @@ class LogPane(QPlainTextEdit):
         super().__init__(parent)
         self.setReadOnly(True)
         self.setMaximumBlockCount(2000)
-        font = QFont("Consolas")
+        font = QFont()
+        font.setFamilies(cjk_families("Consolas"))
         font.setPointSize(9)
         self.setFont(font)
         self.setStyleSheet("background:#fbfbfc;color:#26303a;border:1px solid #dcdcdc;")
 
     def log(self, text: str, level: str = "info") -> None:
         prefix = {"info": "", "warn": "! ", "error": "X ", "ok": "+ "}.get(level, "")
-        self.appendPlainText(prefix + text)
+        self.appendPlainText(prefix + render(text))
         self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
 
 
 __all__ = [
     "FileListWidget", "ColumnMapWidget", "MetricTree", "CheckListWidget",
     "DataFrameView", "FigureGallery", "LogPane", "heading", "hint", "h_line",
-    "ACCENT",
+    "ACCENT", "none_text", "is_none_text", "cjk_families",
 ]

@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from .config import PreprocessConfig
+from .i18n import Text
 from .io_tables import FeatureDataset
 
 
@@ -82,7 +83,7 @@ def prepare(
     names = list(selected) if selected else list(ds.feature_names)
     names = [n for n in names if n in ds.frame.columns]
     if not names:
-        raise ValueError("No features selected.")
+        raise ValueError(Text("No features selected."))
 
     frame = ds.frame
     # pandas may hand back a read-only view; every step below writes in place
@@ -98,13 +99,13 @@ def prepare(
         dropped += [n for n, f in zip(names, all_nan) if f]
         names = [n for n, f in zip(names, all_nan) if not f]
         X = X[:, ~all_nan]
-        notes.append(f"Dropped {int(all_nan.sum())} all-NaN feature(s).")
+        notes.append(Text("Dropped {n} all-NaN feature(s).", n=int(all_nan.sum())))
 
     if cfg.nan_policy == "drop_sample":
         keep_rows = ~np.isnan(X).any(axis=1)
         n_drop = int((~keep_rows).sum())
         if n_drop:
-            notes.append(f"Dropped {n_drop} sample(s) containing NaN.")
+            notes.append(Text("Dropped {n} sample(s) containing NaN.", n=n_drop))
         X = X[keep_rows]
     elif cfg.nan_policy == "drop_feature":
         bad = np.isnan(X).any(axis=0)
@@ -112,17 +113,18 @@ def prepare(
             dropped += [n for n, f in zip(names, bad) if f]
             names = [n for n, f in zip(names, bad) if not f]
             X = X[:, ~bad]
-            notes.append(f"Dropped {int(bad.sum())} feature(s) containing NaN.")
+            notes.append(Text("Dropped {n} feature(s) containing NaN.",
+                              n=int(bad.sum())))
     else:  # impute_median
         n_nan = int(np.isnan(X).sum())
         if n_nan:
             med = np.nanmedian(X, axis=0)
             idx = np.where(np.isnan(X))
             X[idx] = np.take(med, idx[1])
-            notes.append(f"Median-imputed {n_nan} missing value(s).")
+            notes.append(Text("Median-imputed {n} missing value(s).", n=n_nan))
 
     if X.shape[0] < 3:
-        raise ValueError("Fewer than 3 samples remain after the NaN policy.")
+        raise ValueError(Text("Fewer than 3 samples remain after the NaN policy."))
 
     # ---- 2. winsorise -------------------------------------------------
     if cfg.winsorise_quantile > 0:
@@ -130,7 +132,8 @@ def prepare(
         lo = np.nanquantile(X, q, axis=0)
         hi = np.nanquantile(X, 1 - q, axis=0)
         X = np.clip(X, lo, hi)
-        notes.append(f"Winsorised to the [{q:.1%}, {1 - q:.1%}] range.")
+        notes.append(Text("Winsorised to the [{lo:.1%}, {hi:.1%}] range.",
+                          lo=q, hi=1 - q))
 
     # ---- 3. constant features ----------------------------------------
     if cfg.drop_constant:
@@ -140,7 +143,8 @@ def prepare(
             dropped += [n for n, f in zip(names, const) if f]
             names = [n for n, f in zip(names, const) if not f]
             X = X[:, ~const]
-            notes.append(f"Dropped {int(const.sum())} constant feature(s).")
+            notes.append(Text("Dropped {n} constant feature(s).",
+                              n=int(const.sum())))
 
     # ---- 4. scaling ---------------------------------------------------
     centre, scale, X = _scale(X, cfg.scaler)
@@ -151,11 +155,10 @@ def prepare(
         if not keep_f.all():
             removed = [n for n, f in zip(names, keep_f) if not f]
             dropped += removed
-            notes.append(
-                f"Pruned {len(removed)} feature(s) with |r| > "
-                f"{cfg.collinearity_threshold:.2f}: {', '.join(removed[:6])}"
-                + (" ..." if len(removed) > 6 else "")
-            )
+            notes.append(Text(
+                "Pruned {n} feature(s) with |r| > {r:.2f}: {names}",
+                n=len(removed), r=cfg.collinearity_threshold,
+                names=", ".join(removed[:6]) + (" ..." if len(removed) > 6 else "")))
             names = [n for n, f in zip(names, keep_f) if f]
             X = X[:, keep_f]
             centre, scale = centre[keep_f], scale[keep_f]
@@ -164,10 +167,10 @@ def prepare(
     w = np.array([float(cfg.feature_weights.get(n, 1.0)) for n in names])
     if not np.allclose(w, 1.0):
         X = X * w
-        notes.append("Applied user feature weights.")
+        notes.append(Text("Applied user feature weights."))
 
     if X.shape[1] < 2:
-        raise ValueError("Fewer than 2 usable features remain.")
+        raise ValueError(Text("Fewer than 2 usable features remain."))
 
     groups = ds.groups[keep_rows]
     group_values = _ordered_unique(groups)

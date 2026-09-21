@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from ..i18n import Text
+
 
 # ==========================================================================
 # Haufe transform
@@ -239,7 +241,8 @@ def permutation_importance(
                            citations=("breiman2001", "altmann2010"))
     counts = np.bincount(y, minlength=max(k, 1))
     if k < 2 or counts[counts > 0].min() < 2:
-        res.notes.append("Too few samples per group for permutation importance.")
+        res.notes.append(Text("Too few samples per group for permutation "
+                              "importance."))
         return res
 
     labels, members = feature_clusters(X, list(feature_names), cluster_threshold)

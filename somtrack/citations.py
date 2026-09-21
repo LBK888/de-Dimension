@@ -28,6 +28,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Iterable, Literal
 
+from .i18n import Text
+
 # one author's initials: "T.", "S.J.", "C.J.F." -- one group per author
 _INITIALS = re.compile(r"\b(?:[A-Z]\.){1,4}")
 
@@ -427,13 +429,19 @@ class MethodsEntry:
     caveat: str = ""                        # printed as a warning where relevant
 
     def sentence(self) -> str:
-        """``SuperPlots, coloured by replicate (Lord et al., 2020)``"""
-        text = self.label
+        """``SuperPlots, coloured by replicate (Lord et al., 2020)``
+
+        Returned as a :class:`~somtrack.i18n.Text`: the English sentence, which
+        the translated report can render again in another language.  Citations
+        are inserted verbatim -- a reference is not translated.
+        """
+        text = _translatable(self.label)
         if self.detail:
-            text += f", {self.detail}"
+            text = Text("{label}, {detail}", label=text,
+                        detail=_translatable(self.detail))
         refs = cite(*self.citations)
         if refs:
-            text += f" ({refs})"
+            text = Text("{text} ({refs})", text=text, refs=refs)
         return text
 
     def param_text(self) -> str:
@@ -446,6 +454,11 @@ class MethodsEntry:
             else:
                 bits.append(f"{k} = {v}")
         return ", ".join(bits)
+
+
+def _translatable(value) -> Text:
+    """A label or clause from a registry, made renderable in another language."""
+    return value if isinstance(value, Text) else Text(str(value))
 
 
 @dataclass

@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from ..i18n import Text
 from .blocks import (BlockStructure, CvPlan, effective_permutations, make_cv,
                      permutation_p, permutations)
 
@@ -195,13 +196,15 @@ class ClassifyResult:
 
     def summary_line(self) -> str:
         if not np.isfinite(self.balanced_accuracy):
-            return "Classification could not be run."
+            return Text("Classification could not be run.")
         lo, hi = self.ba_ci
-        ci = f" [95% CI {lo:.2f}-{hi:.2f}]" if np.isfinite(lo) else ""
-        p = (f"permutation p = {self.permutation_p:.3f}"
-             if np.isfinite(self.permutation_p) else "no permutation test")
-        return (f"balanced accuracy {self.balanced_accuracy:.2f}{ci} "
-                f"(chance {self.chance:.2f}; {p}, {self.n_permutations} permutations)")
+        ci = (Text(" [95% CI {lo:.2f}-{hi:.2f}]", lo=lo, hi=hi) if np.isfinite(lo)
+              else "")
+        p = (Text("permutation p = {p:.3f}", p=self.permutation_p)
+             if np.isfinite(self.permutation_p) else Text("no permutation test"))
+        return Text("balanced accuracy {ba:.2f}{ci} (chance {chance:.2f}; {p}, "
+                    "{n} permutations)", ba=self.balanced_accuracy, ci=ci,
+                    chance=self.chance, p=p, n=self.n_permutations)
 
     def confusion_frame(self) -> pd.DataFrame:
         if self.confusion.size == 0:
@@ -298,7 +301,7 @@ def classify(
 
     counts = np.bincount(y, minlength=k)
     if k < 2 or counts[counts > 0].min() < 2:
-        res.notes.append("Too few samples per group to cross-validate.")
+        res.notes.append(Text("Too few samples per group to cross-validate."))
         return res
 
     plan = make_cv(y, structure, scheme, n_splits, repeats, random_state)
@@ -307,7 +310,8 @@ def classify(
     est = make_estimator(model, random_state=random_state)
     rounds = _oof_rounds(est, X, y, plan)
     if not rounds:
-        res.notes.append("Cross-validation produced no complete out-of-fold pass.")
+        res.notes.append(Text("Cross-validation produced no complete out-of-fold "
+                              "pass."))
         return res
 
     scores = np.array([_balanced_accuracy(y, p, k) for p in rounds])
@@ -341,9 +345,9 @@ def classify(
         eff = effective_permutations(y, structure)
         res.p_resolution = float(1.0 / (min(eff, null.size) + 1))
         if eff <= null.size:
-            res.notes.append(
-                f"The design allows only {eff} distinct label arrangements, so no "
-                f"p value below {res.p_resolution:.3g} is attainable.")
+            res.notes.append(Text(
+                "The design allows only {eff} distinct label arrangements, so no "
+                "p value below {p:.3g} is attainable.", eff=eff, p=res.p_resolution))
 
     # ---- interpretable weights -------------------------------------------
     if spec.get("linear"):

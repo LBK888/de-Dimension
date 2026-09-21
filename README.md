@@ -50,6 +50,7 @@ python -m somtrack            # desktop app
 | **A conclusion report** | `RESULTS_REPORT.html`, `RESULTS_REPORT.md` and `methods.txt` — a plain-language verdict, a methods paragraph and a reference list, generated from what the run did. |
 | **A colour policy, not a palette** | Above eight groups the figure layer stops using colour and facets instead; the rainbow map is gone. |
 | **One question instead of twenty-one settings** | The analysis page opens on a recipe picker; everything else is folded away. |
+| **繁體中文** | The desktop app in Traditional Chinese (Taiwan), and a report written in English followed by a complete Chinese translation. See [Language](#language--語言). |
 
 Everything from 2.0 still runs, and a 2.0 `analysis_config.json` still loads.
 
@@ -301,6 +302,10 @@ recorded itself — a run that skipped UMAP does not cite McInnes et al.:
 followed by a de-duplicated **reference list with DOIs**, and by the caveats
 attached to whatever was run.
 
+After the English report comes a **complete Traditional Chinese translation**
+of it -- in all three files -- so the two languages are never mixed on one line.
+See [Language](#language--語言) for what is and is not translated.
+
 ---
 
 ## Figures
@@ -401,9 +406,10 @@ thresholds are editable in the Export page.
   trace. Falls back to GIF if ffmpeg is not on PATH.
 * **CSV + one `.xlsx` workbook** — every result table, including the statistics.
 * **`RESULTS_REPORT.html` / `.md`** — the conclusion, the evidence, the methods
-  paragraph and the reference list.
+  paragraph and the reference list; in English, then translated into
+  Traditional Chinese.
 * **`methods.txt`** — the methods paragraph and references on their own, ready
-  to paste.
+  to paste, followed by the Chinese methods paragraph.
 * **`analysis_config.json`** — reload it to reproduce the run exactly.
 
 ---
@@ -491,7 +497,9 @@ somtrack/
   config.py       every parameter, as one serialisable dataclass tree
   citations.py    the bibliography, and the per-run methods log
   recipes.py      whole analyses named after the question they answer
-  report.py       the conclusion report: verdict, methods, references
+  report.py       the conclusion report: verdict, methods, references, and its translation
+  i18n.py         interface language, and sentences that carry their own translation
+  locales/        translation catalogues (zh_TW.py: Traditional Chinese)
   io_tables.py    loading, column auto-detection, dataset assembly
   metrics.py      the metric registry and the per-track kinematics engine
   preprocess.py   scaling, NaN policy, collinearity pruning
@@ -531,7 +539,7 @@ somtrack/
 install.bat       Windows: check Python, build .venv, install dependencies
 start.bat         Windows: open the app, or pass arguments to the CLI
 tests/            statistics tested against data with known answers, plus the
-                  registry, the report and the desktop wiring
+                  registry, the report, the desktop wiring and the translation
 ```
 
 The GUI and the CLI both drive `pipeline.py`, so a run launched either way
@@ -570,6 +578,48 @@ apply are hidden rather than greyed out: an inapplicable control is still
 something the eye has to read and dismiss.
 
 Results open on the conclusion, not on a gallery.
+
+---
+
+## Language / 語言
+
+**The desktop app** is available in English and Traditional Chinese (Taiwan).
+It opens in the language chosen from the **Language / 語言** menu; before
+anything has been chosen, in the language named by the `SOMTRACK_LANG`
+environment variable (`zh_TW` or `en`); failing that, in the system's language
+-- so a Taiwanese Windows installation opens in Chinese the first time. Every
+label, hint, tooltip and log message is translated, and so is the text that
+comes from the registries: method summaries and caveats, parameter names and
+their help, the metric catalogue and the recipes. Option lists show a
+translated label with the configuration value in parentheses, e.g.
+`z 分數標準化（zscore）`, so what you read can be matched to what the methods
+section and `analysis_config.json` record. Metric names in the metric tree stay
+as they are, because they are the column names of every output table; the
+Chinese metric name leads the description beside them.
+
+**The report** (`RESULTS_REPORT.html`, `RESULTS_REPORT.md`, `methods.txt`) is
+written in English first and then again in Traditional Chinese, as a second
+complete document rather than line-by-line pairs. The two are never mixed.
+
+| Translated | Kept in English |
+|---|---|
+| headings and paragraphs | everything inside the figures |
+| the verdict and its caveats | table contents and column names |
+| table captions and the figure index (圖說) | metric, group and parameter names |
+| the methods paragraph and its caveats | the reference list (given once, in the English half) |
+
+Numbers are produced once and rendered twice, so every value in the
+translation is the value in the English report. The translation can be
+switched off on the Export page, with `--translation none` on the command line,
+or with `"translation": ""` in the `report` section of `analysis_config.json`.
+
+Adding a language is one file: `somtrack/locales/<code>.py` holding
+`MESSAGES` (English source string -> translation) and `CONTEXTS`. Interface
+text goes through `i18n.tr()`; generated sentences are `i18n.Text` objects --
+the English string itself, able to render its translation later -- which is
+how one run can write both halves of the report. `tests/test_i18n.py` fails if
+a translation drops a `{placeholder}`, if a Chinese run meets a string with no
+translation, or if Chinese reaches a figure.
 
 ---
 

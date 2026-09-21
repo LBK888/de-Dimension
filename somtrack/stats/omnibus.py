@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from ..i18n import Text
 from .blocks import (BlockStructure, effective_permutations, permutation_p,
                      permutations)
 
@@ -308,20 +309,20 @@ class SeparationReport:
     def interpretation(self) -> str:
         """The sentence that stops a dispersion effect being read as a shift."""
         if not np.isfinite(self.permanova_p):
-            return "The multivariate test could not be run."
+            return Text("The multivariate test could not be run.")
         if not self.groups_differ:
-            return ("The groups did not differ detectably in their overall "
-                    "multivariate phenotype.")
+            return Text("The groups did not differ detectably in their overall "
+                        "multivariate phenotype.")
         if self.dispersion_differs:
-            return ("The groups differ, but they also differ in how variable they "
-                    "are, so at least part of the separation is a difference in "
-                    "spread rather than a shift in the group average. Read a "
-                    "result like this as 'these animals are more variable', not "
-                    "'these animals are faster', unless the per-metric effects "
-                    "say otherwise.")
-        return ("The groups differ in their multivariate average, and their "
-                "within-group variability is comparable, so this is a genuine "
-                "shift in phenotype rather than a change in variability.")
+            return Text("The groups differ, but they also differ in how variable "
+                        "they are, so at least part of the separation is a "
+                        "difference in spread rather than a shift in the group "
+                        "average. Read a result like this as 'these animals are "
+                        "more variable', not 'these animals are faster', unless the "
+                        "per-metric effects say otherwise.")
+        return Text("The groups differ in their multivariate average, and their "
+                    "within-group variability is comparable, so this is a genuine "
+                    "shift in phenotype rather than a change in variability.")
 
     def table(self) -> pd.DataFrame:
         rows = [
@@ -364,7 +365,7 @@ def analyse_separation(
                            design=structure.design, design_note=structure.note,
                            n_permutations=n_permutations)
     if k < 2:
-        rep.notes.append("At least two groups are needed for a separation test.")
+        rep.notes.append(Text("At least two groups are needed for a separation test."))
         return rep
 
     D = distance_matrix(X, metric)

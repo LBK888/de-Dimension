@@ -29,6 +29,7 @@ from itertools import product
 import numpy as np
 import pandas as pd
 
+from ..i18n import Text, join_list
 from .projection import DataContext
 from .registry import get, run_method
 
@@ -75,19 +76,22 @@ class ScanResult:
     def plateau_text(self) -> str:
         """The sentence that goes under the scan figure."""
         if self.plateau.empty or len(self.plateau) <= 1:
-            return (f"The best setting was {_fmt(self.best_params())}; no other "
-                    f"setting came within {self.tolerance:.0%} of it.")
+            return Text("The best setting was {best}; no other setting came within "
+                        "{tol:.0%} of it.", best=_fmt(self.best_params()),
+                        tol=self.tolerance)
         bits = []
         for k in self.grid:
             vals = sorted(set(self.plateau[k].tolist()))
             if len(vals) == 1:
                 bits.append(f"{k} = {_fmt_one(vals[0])}")
             else:
-                bits.append(f"{k} from {_fmt_one(vals[0])} to {_fmt_one(vals[-1])}")
-        return (f"{len(self.plateau)} of {self.n_cells} settings scored within "
-                f"{self.tolerance:.0%} of the best ({', '.join(bits)}), so the "
-                f"result does not depend on the exact choice. "
-                f"{_fmt(self.best_params())} was used.")
+                bits.append(Text("{param} from {lo} to {hi}", param=k,
+                                 lo=_fmt_one(vals[0]), hi=_fmt_one(vals[-1])))
+        return Text("{n} of {total} settings scored within {tol:.0%} of the best "
+                    "({ranges}), so the result does not depend on the exact choice. "
+                    "{best} was used.", n=len(self.plateau), total=self.n_cells,
+                    tol=self.tolerance, ranges=join_list(bits),
+                    best=_fmt(self.best_params()))
 
 
 def _fmt_one(v) -> str:
@@ -180,7 +184,8 @@ def scan(
                         rows=frame, coords=coords, criterion=criterion,
                         higher_is_better=higher, tolerance=tolerance,
                         citations=spec.citations,
-                        note=f"Settings were scored by {description}.")
+                        note=Text("Settings were scored by {criterion}.",
+                                  criterion=Text(description)))
 
     if column in frame and frame[column].notna().any():
         vals = frame[column].to_numpy(float)
@@ -202,8 +207,9 @@ def scan(
 
     if log is not None:
         log.record(
-            "Projection", f"{spec.label} parameter scan",
-            f"{len(combos)} settings scored by {description}",
+            "Projection", Text("{method} parameter scan", method=spec.label),
+            Text("{n} settings scored by {criterion}", n=len(combos),
+                 criterion=Text(description)),
             citations=spec.citations + (("xia2024",) if criterion == "dubious_fraction"
                                         else ()),
             **{f"scanned_{k}": f"{min(v)}-{max(v)}" if len(v) > 1 else v[0]
@@ -263,7 +269,7 @@ def scan_som(X: np.ndarray, base, grid: dict[str, list],
     result = ScanResult(method="som", method_label="Self-organising map", grid=grid,
                         rows=frame, criterion="quantisation_error",
                         higher_is_better=False, citations=("kohonen2001",),
-                        note="Settings were scored by quantisation error.")
+                        note=Text("Settings were scored by quantisation error."))
     if "quantisation_error" in frame and frame["quantisation_error"].notna().any():
         vals = frame["quantisation_error"].to_numpy(float)
         idx = int(np.nanargmin(vals))
@@ -274,7 +280,7 @@ def scan_som(X: np.ndarray, base, grid: dict[str, list],
                                    & np.isfinite(vals)].copy()
     if log is not None:
         log.record("Clustering", "SOM parameter scan",
-                   f"{len(frame)} settings compared by map quality",
+                   Text("{n} settings compared by map quality", n=len(frame)),
                    citations=("kohonen2001",))
     return result
 

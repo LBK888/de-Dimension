@@ -33,6 +33,8 @@ from typing import Iterator, Literal
 
 import numpy as np
 
+from ..i18n import Text
+
 Design = Literal["none", "nested", "crossed", "mixed"]
 CvScheme = Literal["auto", "stratified", "repeated_stratified",
                    "grouped", "leave_one_replicate_out"]
@@ -65,14 +67,14 @@ def analyse_blocks(group_codes: np.ndarray,
     n = len(group_codes)
     if not use_replicates or replicates is None:
         return BlockStructure("none", None, [], 0, n,
-                              "Samples were treated as independent units.")
+                              Text("Samples were treated as independent units."))
 
     rep = np.asarray(replicates)
     values = _ordered_unique(rep)
     if len(values) < 2:
         return BlockStructure("none", None, [], 0, n,
-                              "The replicate column held a single value, so samples "
-                              "were treated as independent units.")
+                              Text("The replicate column held a single value, so "
+                                   "samples were treated as independent units."))
 
     lookup = {v: i for i, v in enumerate(values)}
     blocks = np.array([lookup[v] for v in rep.tolist()], dtype=int)
@@ -83,22 +85,22 @@ def analyse_blocks(group_codes: np.ndarray,
 
     if all(pure):
         design: Design = "nested"
-        note = (f"Replicates were nested within groups ({len(values)} replicates, "
-                f"each belonging to one group), so the replicate was treated as "
-                f"the experimental unit.")
+        note = Text("Replicates were nested within groups ({n} replicates, each "
+                    "belonging to one group), so the replicate was treated as the "
+                    "experimental unit.", n=len(values))
         units = len(values)
     elif not any(pure):
         design = "crossed"
-        note = (f"Every replicate contained several groups ({len(values)} blocks), "
-                f"so the design was treated as randomised blocks and labels were "
-                f"permuted within blocks.")
+        note = Text("Every replicate contained several groups ({n} blocks), so the "
+                    "design was treated as randomised blocks and labels were "
+                    "permuted within blocks.", n=len(values))
         units = n
     else:
         design = "mixed"
-        note = (f"Replicates were partly nested and partly crossed with the groups "
-                f"({len(values)} replicates); labels were permuted within blocks "
-                f"where possible and whole replicates were kept inside one "
-                f"cross-validation fold.")
+        note = Text("Replicates were partly nested and partly crossed with the "
+                    "groups ({n} replicates); labels were permuted within blocks "
+                    "where possible and whole replicates were kept inside one "
+                    "cross-validation fold.", n=len(values))
         units = n
 
     return BlockStructure(design, blocks, list(values), len(values), units, note)
@@ -223,9 +225,10 @@ def make_cv(y: np.ndarray, structure: BlockStructure, scheme: CvScheme = "auto",
         scheme = "repeated_stratified"
 
     if scheme == "leave_one_replicate_out":
-        return CvPlan(LeaveOneGroupOut(), "leave-one-replicate-out cross-validation",
+        return CvPlan(LeaveOneGroupOut(),
+                      Text("leave-one-replicate-out cross-validation"),
                       structure.n_blocks, True, structure.blocks,
-                      "Each fold held out one whole replicate.")
+                      Text("Each fold held out one whole replicate."))
 
     if scheme == "grouped":
         try:
@@ -235,32 +238,34 @@ def make_cv(y: np.ndarray, structure: BlockStructure, scheme: CvScheme = "auto",
             return CvPlan(
                 StratifiedGroupKFold(n_splits=kk, shuffle=True,
                                      random_state=random_state),
-                f"{kk}-fold cross-validation with whole replicates held out together",
+                Text("{k}-fold cross-validation with whole replicates held out "
+                     "together", k=kk),
                 kk, True, structure.blocks,
-                "No replicate appeared in both the training and the test set, so "
-                "the score cannot come from recognising a replicate.")
+                Text("No replicate appeared in both the training and the test set, "
+                     "so the score cannot come from recognising a replicate."))
         except ImportError:                                   # scikit-learn < 1.0
             from sklearn.model_selection import GroupKFold
 
             kk = int(np.clip(min(k, structure.n_blocks), 2, structure.n_blocks))
             return CvPlan(GroupKFold(n_splits=kk),
-                          f"{kk}-fold grouped cross-validation", kk, True,
+                          Text("{k}-fold grouped cross-validation", k=kk), kk, True,
                           structure.blocks,
-                          "No replicate appeared in both training and test sets.")
+                          Text("No replicate appeared in both training and test sets."))
 
     if scheme == "stratified":
         return CvPlan(StratifiedKFold(n_splits=k, shuffle=True,
                                       random_state=random_state),
-                      f"{k}-fold stratified cross-validation", k, False, None,
-                      "Folds preserved the group proportions.")
+                      Text("{k}-fold stratified cross-validation", k=k), k, False, None,
+                      Text("Folds preserved the group proportions."))
 
     return CvPlan(
         RepeatedStratifiedKFold(n_splits=k, n_repeats=repeats,
                                 random_state=random_state),
-        f"{k}-fold stratified cross-validation repeated {repeats} times",
+        Text("{k}-fold stratified cross-validation repeated {repeats} times",
+             k=k, repeats=repeats),
         k * repeats, False, None,
-        "Folds preserved the group proportions; repeating the split reduces the "
-        "influence of any one partition.")
+        Text("Folds preserved the group proportions; repeating the split reduces "
+             "the influence of any one partition."))
 
 
 # ==========================================================================

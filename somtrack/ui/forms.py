@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout
                                QWidget)
 
 from ..analysis.registry import MethodSpec, ParamSpec
+from ..i18n import tr
 from .widgets import hint
 
 
@@ -38,6 +39,7 @@ class Collapsible(QWidget):
         lay.setContentsMargins(0, 4, 0, 0)
         lay.setSpacing(4)
 
+        title = tr(title)
         self.toggle = QCheckBox(title)
         self.toggle.setChecked(open_)
         self.toggle.setStyleSheet(
@@ -74,18 +76,18 @@ class ParamRow(QWidget):
         lay.setSpacing(8)
 
         self.control = _control_for(spec)
-        self.control.setToolTip(spec.help or "")
+        self.control.setToolTip(tr(spec.help) if spec.help else "")
         self._dirty = False
         _on_change(self.control, self._touched)
         lay.addWidget(self.control)
 
-        self.auto = QCheckBox("Auto")
+        self.auto = QCheckBox(tr("Auto"))
         self.auto.setChecked(spec.suggest is not None)
         self.auto.setVisible(spec.suggest is not None)
-        self.auto.setToolTip(
+        self.auto.setToolTip(tr(
             "Let SOMTrack choose this from the size of your data set. "
             "The value it picked is shown beside the box and is recorded in the "
-            "methods section.")
+            "methods section."))
         self.auto.toggled.connect(self._on_auto)
         lay.addWidget(self.auto)
 
@@ -106,7 +108,7 @@ class ParamRow(QWidget):
             self.note.setText("")
             return
         text = f"{value:g}" if isinstance(value, float) else str(value)
-        self.note.setText(f"auto: {text}")
+        self.note.setText(tr("auto: {value}").format(value=text))
         if self.auto.isChecked():
             _set_value(self.control, value)
 
@@ -158,9 +160,14 @@ def _control_for(spec: ParamSpec) -> QWidget:
         w = QCheckBox()
         w.setChecked(bool(spec.default))
         return w
+    # The value travels as item data; the label is only what the user reads,
+    # so a translated label can never leak into the configuration.
     w = QComboBox()
-    w.addItems([str(c) for c in spec.choices])
-    w.setCurrentText(str(spec.default))
+    for c in spec.choices:
+        w.addItem(tr(str(c), context="choice"), c)
+    i = w.findData(spec.default)
+    if i >= 0:
+        w.setCurrentIndex(i)
     return w
 
 
@@ -180,7 +187,8 @@ def _get_value(w: QWidget):
     if isinstance(w, QCheckBox):
         return bool(w.isChecked())
     if isinstance(w, QComboBox):
-        return w.currentText()
+        data = w.currentData()
+        return data if data is not None else w.currentText()
     return None
 
 
@@ -193,7 +201,12 @@ def _set_value(w: QWidget, value) -> None:
         elif isinstance(w, QCheckBox):
             w.setChecked(bool(value))
         elif isinstance(w, QComboBox):
-            w.setCurrentText(str(value))
+            i = w.findData(value)
+            if i < 0:
+                i = next((k for k in range(w.count())
+                          if str(w.itemData(k)) == str(value)), -1)
+            if i >= 0:
+                w.setCurrentIndex(i)
     except (TypeError, ValueError):
         pass
 
@@ -214,9 +227,9 @@ class MethodPanel(QWidget):
         lay.setSpacing(4)
 
         if spec.summary:
-            lay.addWidget(hint(spec.summary))
+            lay.addWidget(hint(tr(spec.summary)))
         if spec.caveat:
-            warn = QLabel("⚠  " + spec.caveat)
+            warn = QLabel("⚠  " + tr(spec.caveat))
             warn.setWordWrap(True)
             warn.setStyleSheet("color:#8a3b00;font-size:11px;")
             lay.addWidget(warn)
@@ -239,7 +252,7 @@ class MethodPanel(QWidget):
             row = ParamRow(spec)
             row.changed.connect(self.changed.emit)
             self.rows[spec.name] = row
-            form.addRow(spec.display, row)
+            form.addRow(tr(spec.display), row)
         return form
 
     # ------------------------------------------------------------------

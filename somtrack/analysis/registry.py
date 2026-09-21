@@ -25,6 +25,7 @@ from typing import Any, Callable, Literal
 
 import numpy as np
 
+from ..i18n import Text
 from .projection import DataContext, ProjectionResult
 
 Family = Literal["linear", "manifold", "supervised", "som"]
@@ -170,12 +171,15 @@ class MethodSpec:
     def usable(self, ctx: DataContext) -> tuple[bool, str]:
         """Can this method run on this data?  Returns (ok, reason-if-not)."""
         if not self.available():
-            return False, self.install_hint or f"{self.label} is not installed."
+            return False, (Text(self.install_hint) if self.install_hint else
+                           Text("{method} is not installed.", method=self.label))
         if self.needs_groups and not ctx.has_groups:
-            return False, f"{self.label} needs at least two labelled groups."
+            return False, Text("{method} needs at least two labelled groups.",
+                               method=self.label)
         if ctx.n_samples < self.min_samples:
-            return False, (f"{self.label} needs at least {self.min_samples} samples "
-                           f"(this data set has {ctx.n_samples}).")
+            return False, Text("{method} needs at least {n} samples (this data set "
+                               "has {have}).", method=self.label,
+                               n=self.min_samples, have=ctx.n_samples)
         return True, ""
 
 

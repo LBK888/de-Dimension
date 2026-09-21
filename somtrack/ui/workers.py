@@ -6,6 +6,8 @@ import traceback
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
+from ..i18n import Text, render
+
 
 class Worker(QObject):
     """Runs one callable off the GUI thread and reports progress."""
@@ -25,14 +27,23 @@ class Worker(QObject):
         try:
             result = self._fn(*self._args, progress=self._emit, **self._kwargs)
         except Exception as exc:                    # surfaced in the log pane
-            self.failed.emit(str(exc), traceback.format_exc())
+            self.failed.emit(_message(exc), traceback.format_exc())
             return
         self.finished.emit(result)
 
     def _emit(self, message, fraction=None) -> None:
         if fraction is None and isinstance(message, (int, float)):
             message, fraction = "", float(message)
-        self.progress.emit(str(message), float(fraction or 0.0))
+        # A Qt signal carries a plain str, which would drop a Text's translation,
+        # so the message is rendered in the interface language before it leaves.
+        self.progress.emit(render(message), float(fraction or 0.0))
+
+
+def _message(exc: Exception) -> str:
+    """An exception's message in the interface language, where it has one."""
+    if len(exc.args) == 1 and isinstance(exc.args[0], Text):
+        return exc.args[0].render()
+    return str(exc)
 
 
 class TaskRunner(QObject):

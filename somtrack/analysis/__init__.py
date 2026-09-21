@@ -17,6 +17,7 @@ from typing import Callable, Iterable
 
 import numpy as np
 
+from ..i18n import Text
 from .projection import DataContext, ProjectionResult, axis_correlation, two_columns
 from .quality import (Reliability, Stability, neighbour_agreement,
                       point_reliability, rank_quality, seed_stability)
@@ -94,7 +95,8 @@ def run_projections(
         try:
             res = run_method(key, ctx, overrides.get(key))
         except Exception as exc:
-            _warn(warn, f"{spec.label} failed and was skipped: {exc}")
+            _warn(warn, Text("{method} failed and was skipped: {error}",
+                             method=spec.label, error=str(exc)))
             continue
 
         evaluate(res, ctx, rank=rank, reliability=reliability,

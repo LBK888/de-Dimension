@@ -1,22 +1,27 @@
-"""The SOMTrack main window: a six-step wizard with a persistent status pane."""
+"""The SOMTrack main window: a seven-step wizard with a persistent status pane."""
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QSplitter,
                                QStackedWidget, QVBoxLayout, QWidget)
 
+from .. import __version__
 from ..config import AnalysisConfig
+from ..i18n import LANGUAGES, language, render, tr
 from .pages import (AppState, ClusterPage, ComparePage, ExportPage,
                     MetricsPage, PreprocessPage, ResultsPage, SourcePage)
 from .widgets import ACCENT, LogPane, heading
 from .workers import TaskRunner
 
+# English source strings; each is translated when the sidebar is built, so the
+# list itself does not depend on the language the app was started in.
 STEP_TITLES = [
     "1  Data source",
     "2  Metrics",
@@ -31,7 +36,8 @@ STEP_TITLES = [
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SOMTrack 3.0 - locomotion metrics, multivariate analysis and publication figures")
+        self.setWindowTitle(tr("SOMTrack 3.0 - locomotion metrics, multivariate "
+                               "analysis and publication figures"))
         self.resize(1360, 900)
 
         self.state = AppState()
@@ -91,7 +97,7 @@ class MainWindow(QMainWindow):
         title = heading("SOMTrack", 17)
         title.setStyleSheet(f"color:{ACCENT};")
         lay.addWidget(title)
-        sub = QLabel("v2.0  ·  locomotion SOM")
+        sub = QLabel(f"v{__version__}  ·  " + tr("locomotion SOM"))
         sub.setStyleSheet("color:#7a828c;")
         lay.addWidget(sub)
         lay.addSpacing(14)
@@ -105,7 +111,7 @@ class MainWindow(QMainWindow):
             "QListWidget::item:disabled{color:#b3bac2;}"
         )
         for t in STEP_TITLES:
-            self.steps.addItem(QListWidgetItem(t))
+            self.steps.addItem(QListWidgetItem(tr(t)))
         self.steps.currentRowChanged.connect(self._sidebar_clicked)
         self.steps.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.steps.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -116,7 +122,7 @@ class MainWindow(QMainWindow):
 
         self.log = LogPane()
         self.log.setMinimumHeight(190)
-        lay.addWidget(QLabel("Log"))
+        lay.addWidget(QLabel(tr("Log")))
         lay.addWidget(self.log)
         return w
 
@@ -130,13 +136,13 @@ class MainWindow(QMainWindow):
         self.progress.setMaximumWidth(280)
         self.progress.setTextVisible(False)
         self.progress.setVisible(False)
-        self.status_label = QLabel("Ready")
+        self.status_label = QLabel(tr("Ready"))
         self.status_label.setStyleSheet("color:#5d6570;")
         lay.addWidget(self.progress)
         lay.addWidget(self.status_label, 1)
 
-        self.back_btn = QPushButton("Back")
-        self.next_btn = QPushButton("Next")
+        self.back_btn = QPushButton(tr("Back"))
+        self.next_btn = QPushButton(tr("Next"))
         self.next_btn.setDefault(True)
         self.next_btn.setStyleSheet(
             f"QPushButton{{background:{ACCENT};color:white;padding:6px 22px;"
@@ -149,23 +155,37 @@ class MainWindow(QMainWindow):
         return w
 
     def _build_menu(self) -> None:
-        m = self.menuBar().addMenu("&File")
+        m = self.menuBar().addMenu(tr("&File"))
         for text, slot, shortcut in (
-            ("Save settings...", self._save_config, QKeySequence.StandardKey.Save),
-            ("Load settings...", self._load_config, QKeySequence.StandardKey.Open),
+            (tr("Save settings..."), self._save_config, QKeySequence.StandardKey.Save),
+            (tr("Load settings..."), self._load_config, QKeySequence.StandardKey.Open),
         ):
             a = QAction(text, self)
             a.setShortcut(shortcut)
             a.triggered.connect(slot)
             m.addAction(a)
         m.addSeparator()
-        quit_a = QAction("Quit", self)
+        quit_a = QAction(tr("Quit"), self)
         quit_a.setShortcut(QKeySequence.StandardKey.Quit)
         quit_a.triggered.connect(self.close)
         m.addAction(quit_a)
 
-        h = self.menuBar().addMenu("&Help")
-        about = QAction("About SOMTrack", self)
+        # "Language / 語言" in both scripts, so it can be found by someone who
+        # cannot read the language the menu bar is currently in.
+        lang_menu = self.menuBar().addMenu("&Language / 語言")
+        group = QActionGroup(self)
+        group.setExclusive(True)
+        self.language_actions: dict[str, QAction] = {}
+        for code, name in LANGUAGES.items():
+            a = QAction(name, self, checkable=True)
+            a.setChecked(code == language())
+            a.triggered.connect(lambda _=False, c=code: self._set_language(c))
+            group.addAction(a)
+            lang_menu.addAction(a)
+            self.language_actions[code] = a
+
+        h = self.menuBar().addMenu(tr("&Help"))
+        about = QAction(tr("About SOMTrack"), self)
         about.triggered.connect(self._about)
         h.addAction(about)
 
@@ -177,6 +197,7 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------
     def _log(self, message: str, level: str = "info") -> None:
+        message = render(message)
         self.log.log(message, level)
         self.status_label.setText(message)
 
@@ -191,20 +212,20 @@ class MainWindow(QMainWindow):
                 if b is not None:
                     b.setEnabled(not on)
         if message:
-            self.status_label.setText(message)
+            self.status_label.setText(render(message))
 
     def _on_progress(self, message: str, fraction: float) -> None:
         self.progress.setValue(int(fraction * 100))
         if message:
-            self.status_label.setText(message)
+            self.status_label.setText(render(message))
 
     def _on_error(self, message: str, tb: str) -> None:
         self._busy(False)
         self._log(message, "error")
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
-        box.setWindowTitle("Something went wrong")
-        box.setText(message)
+        box.setWindowTitle(tr("Something went wrong"))
+        box.setText(render(message))
         box.setDetailedText(tb)
         box.exec()
 
@@ -228,7 +249,7 @@ class MainWindow(QMainWindow):
         self.steps.setCurrentRow(index)
         self.steps.blockSignals(False)
         self.back_btn.setEnabled(index > 0)
-        self.next_btn.setText("Finish" if index == len(self.pages) - 1 else "Next")
+        self.next_btn.setText(tr("Finish") if index == len(self.pages) - 1 else tr("Next"))
         self.next_btn.setEnabled(index < len(self.pages) - 1)
         self.pages[index].on_enter()
 
@@ -237,18 +258,19 @@ class MainWindow(QMainWindow):
         problem = page.validate()
         if problem:
             self._log(problem, "warn")
-            QMessageBox.information(self, "One more thing", problem)
+            QMessageBox.information(self, tr("One more thing"), render(problem))
             return
         try:
             page.commit()
         except Exception as exc:
-            self._on_error(str(exc), "")
+            self._on_error(_exception_text(exc), "")
             return
 
         idx = self.stack.currentIndex()
         if idx == 0 and self.state.entry_mode == "features":
-            self._log(f"Loaded {len(self.state.features.frame)} samples, "
-                      f"{len(self.state.features.feature_names)} features.", "ok")
+            self._log(tr("Loaded {n} samples, {m} features.").format(
+                n=len(self.state.features.frame),
+                m=len(self.state.features.feature_names)), "ok")
             self._go_to(2)
             return
         self._go_to(idx + 1)
@@ -260,13 +282,13 @@ class MainWindow(QMainWindow):
         page = self.metrics_page
         selected = page.tree.selected()
         if len(selected) < 2:
-            QMessageBox.information(self, "Pick some metrics",
-                                    "Select at least two metrics.")
+            QMessageBox.information(self, tr("Pick some metrics"),
+                                    tr("Select at least two metrics."))
             return
         self.state.config.selected_features = selected
-        self._busy(True, "Computing metrics...")
-        self._log(f"Computing {len(selected)} metrics for "
-                  f"{self.state.spots.n_tracks} tracks...")
+        self._busy(True, tr("Computing metrics..."))
+        self._log(tr("Computing {n} metrics for {t} tracks...").format(
+            n=len(selected), t=self.state.spots.n_tracks))
 
         from .. import pipeline
 
@@ -281,8 +303,11 @@ class MainWindow(QMainWindow):
         self.state.features = features
         self.metrics_page.show_features(features)
         n_drop = self.state.spots.n_tracks - len(features.frame)
-        self._log(f"{len(features.frame)} tracks x {len(features.feature_names)} metrics"
-                  + (f" ({n_drop} track(s) dropped as too short)" if n_drop else ""), "ok")
+        text = tr("{n} tracks x {m} metrics").format(
+            n=len(features.frame), m=len(features.feature_names))
+        if n_drop:
+            text += tr(" ({n} track(s) dropped as too short)").format(n=n_drop)
+        self._log(text, "ok")
 
     # ------------------------------------------------------------------
     def _run_analysis(self) -> None:
@@ -291,15 +316,16 @@ class MainWindow(QMainWindow):
         for page in (self.preprocess_page, self.analysis_page):
             problem = page.validate()
             if problem:
-                QMessageBox.information(self, "One more thing", problem)
+                QMessageBox.information(self, tr("One more thing"), render(problem))
                 return
             page.commit()
         self.export_page.commit()          # figure style is needed while rendering
 
-        self._busy(True, "Running analysis...")
-        self._log(f"SOM: {self.state.config.som.algorithm}, "
-                  f"{self.state.config.som.epochs} epochs; "
-                  f"{len(self.state.config.selected_features)} features.")
+        self._busy(True, tr("Running analysis..."))
+        self._log(tr("SOM: {algorithm}, {epochs} epochs; {n} features.").format(
+            algorithm=tr(self.state.config.som.algorithm, context="som_algorithm"),
+            epochs=self.state.config.som.epochs,
+            n=len(self.state.config.selected_features)))
 
         from .. import pipeline
 
@@ -320,18 +346,19 @@ class MainWindow(QMainWindow):
             self._log(w, "warn")
         q = result.quality
         self._log(
-            "Done. QE={:.3f}  TE={:.3f}  purity={:.3f}  occupancy={:.0%}".format(
-                q.get("quantisation_error", float("nan")),
-                q.get("topographic_error", float("nan")),
-                q.get("group_purity", float("nan")),
-                q.get("node_occupancy", float("nan"))), "ok")
+            tr("Done. QE={qe:.3f}  TE={te:.3f}  purity={purity:.3f}  "
+               "occupancy={occupancy:.0%}").format(
+                qe=q.get("quantisation_error", float("nan")),
+                te=q.get("topographic_error", float("nan")),
+                purity=q.get("group_purity", float("nan")),
+                occupancy=q.get("node_occupancy", float("nan"))), "ok")
         if result.verdict is not None:
             level = {"strong": "ok", "moderate": "ok",
                      "weak": "warn", "none": "warn"}.get(result.verdict.confidence,
                                                          "info")
             self._log(result.verdict.headline, level)
             for line in result.verdict.bullets()[1:4]:
-                self._log("  " + line)
+                self._log("  " + render(line))
         self.results_page.show_result(result, panels)
         self.compare_page.show_result(result)
         self._go_to(self.pages.index(self.results_page))
@@ -343,9 +370,9 @@ class MainWindow(QMainWindow):
             return
         if self.state.result is None:
             QMessageBox.information(
-                self, "Run the analysis first",
-                "A scan re-uses the feature matrix the analysis prepared, so "
-                "there has to be one. Go back to Analysis and press Run.")
+                self, tr("Run the analysis first"),
+                tr("A scan re-uses the feature matrix the analysis prepared, so "
+                   "there has to be one. Go back to Analysis and press Run."))
             return
 
         from ..analysis import DataContext, get
@@ -356,21 +383,22 @@ class MainWindow(QMainWindow):
             prep, random_state=self.state.config.embedding.random_state)
         ok, why = get(method).usable(ctx)
         if not ok:
-            QMessageBox.information(self, "Cannot scan that", why)
+            QMessageBox.information(self, tr("Cannot scan that"), render(why))
             return
 
         grid = default_grid(method, ctx)
         cells = 1
         for values in grid.values():
             cells *= len(values)
-        self._busy(True, f"Scanning {cells} settings...")
-        self._log(f"Scanning {get(method).label} over "
-                  + "; ".join(f"{k} = {v}" for k, v in grid.items()))
+        self._busy(True, tr("Scanning {n} settings...").format(n=cells))
+        self._log(tr("Scanning {method} over {grid}").format(
+            method=get(method).label,
+            grid="; ".join(f"{k} = {v}" for k, v in grid.items())))
 
         def job(progress=None):
             def tick(i, n):
                 if progress:
-                    progress(f"Scanning ({i}/{n})", i / max(n, 1))
+                    progress(tr("Scanning ({i}/{n})").format(i=i, n=n), i / max(n, 1))
             return run_scan(ctx, method, grid, criterion=criterion,
                             reliability_null=8, progress=tick,
                             log=self.state.result.methods_log)
@@ -388,12 +416,13 @@ class MainWindow(QMainWindow):
         if self.runner.busy:
             return
         if self.state.result is None:
-            QMessageBox.information(self, "Nothing to export", "Run the analysis first.")
+            QMessageBox.information(self, tr("Nothing to export"),
+                                    tr("Run the analysis first."))
             return
         self.export_page.commit()
         out = self.state.config.export.out_dir
-        self._busy(True, f"Exporting to {out}...")
-        self._log(f"Exporting to {out}")
+        self._busy(True, tr("Exporting to {path}...").format(path=out))
+        self._log(tr("Exporting to {path}").format(path=out))
 
         from .. import pipeline
 
@@ -407,17 +436,22 @@ class MainWindow(QMainWindow):
     def _export_done(self, manifest) -> None:
         self._busy(False)
         n_fig = len([k for k in manifest.figures if not k.startswith("_")])
-        self._log(f"Exported {n_fig} figures, {len(manifest.tables)} tables"
-                  + (f", {len(manifest.videos)} video" if manifest.videos else "")
-                  + f" to {manifest.out_dir}", "ok")
+        text = tr("Exported {n} figures, {t} tables").format(
+            n=n_fig, t=len(manifest.tables))
+        if manifest.videos:
+            text += tr(", {n} video").format(n=len(manifest.videos))
+        text += tr(" to {path}").format(path=manifest.out_dir)
+        self._log(text, "ok")
         for w in self.state.result.warnings[-4:]:
             self._log(w, "warn")
         QMessageBox.information(
-            self, "Export complete",
-            f"Wrote {n_fig} figures and {len(manifest.tables)} tables to\n"
-            f"{manifest.out_dir}\n\n"
-            "SOMTrack_report.pdf holds every figure with selectable text; "
-            "methods.txt is a ready-to-paste methods paragraph.")
+            self, tr("Export complete"),
+            tr("Wrote {n} figures and {t} tables to\n{path}\n\n"
+               "SOMTrack_report.pdf holds every figure with selectable text; "
+               "methods.txt is a ready-to-paste methods paragraph. "
+               "RESULTS_REPORT.html gives the report in English followed by its "
+               "Chinese translation.").format(
+                n=n_fig, t=len(manifest.tables), path=manifest.out_dir))
 
     # ------------------------------------------------------------------
     def _save_config(self) -> None:
@@ -426,42 +460,81 @@ class MainWindow(QMainWindow):
                 p.commit()
             except Exception:
                 pass
-        path, _ = QFileDialog.getSaveFileName(self, "Save settings",
-                                              "somtrack_settings.json", "JSON (*.json)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("Save settings"),
+                                              "somtrack_settings.json",
+                                              "JSON (*.json)")
         if not path:
             return
         self.state.config.to_json(path)
-        self._log(f"Settings saved to {path}", "ok")
+        self._log(tr("Settings saved to {path}").format(path=path), "ok")
 
     def _load_config(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Load settings", "", "JSON (*.json)")
+        path, _ = QFileDialog.getOpenFileName(self, tr("Load settings"), "",
+                                              "JSON (*.json)")
         if not path:
             return
         try:
             self.state.config = AnalysisConfig.from_json(path)
         except Exception as exc:
-            QMessageBox.warning(self, "Could not load settings", str(exc))
+            QMessageBox.warning(self, tr("Could not load settings"),
+                                _exception_text(exc))
             return
         for p in self.pages:
             p.state.config = self.state.config
-        self._log(f"Settings loaded from {path}. Re-visit the steps to apply them.", "ok")
+        self._log(tr("Settings loaded from {path}. Re-visit the steps to apply "
+                     "them.").format(path=path), "ok")
+
+    # ------------------------------------------------------------------
+    def _set_language(self, code: str) -> None:
+        """Remember the choice; it takes effect when the window is rebuilt."""
+        from .app import save_language
+
+        save_language(code)
+        if code == language():
+            return
+        # Asked in the language being switched *to*, since that is the one
+        # the person choosing it reads.
+        title = tr("Change language", lang=code)
+        text = tr("SOMTrack will use the new language the next time it starts. "
+                  "Restart now? Anything not saved will be lost.", lang=code)
+        answer = QMessageBox.question(self, title, text)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        if self.runner.busy:
+            QMessageBox.information(self, title,
+                                    tr("A task is still running. Restart SOMTrack "
+                                       "when it has finished.", lang=code))
+            return
+        from PySide6.QtCore import QProcess
+
+        if QProcess.startDetached(sys.executable, ["-m", "somtrack"],
+                                  str(Path.cwd()))[0]:
+            self.close()
+        else:
+            QMessageBox.information(self, title,
+                                    tr("Please close and reopen SOMTrack.", lang=code))
 
     def _about(self) -> None:
         QMessageBox.about(
-            self, "About SOMTrack",
-            "<b>SOMTrack 2.0</b><br><br>"
-            "A Python refactor of <i>SOM tracking_v1.2b.ijm</i> "
-            "(Wang, Ho &amp; Liao, NTOU 2020).<br><br>"
-            "Computes locomotion and biophysical metrics from tracking coordinates, "
-            "clusters them with self-organising maps (batch, supervised XY-fused, "
-            "relevance-learning and growing variants) alongside PCA, t-SNE and UMAP, "
-            "and reports which metrics actually drive the group separation.<br><br>"
-            "Figures export as editable-text PDF/SVG, 600 dpi PNG and MP4.")
+            self, tr("About SOMTrack"),
+            f"<b>SOMTrack {__version__}</b><br><br>"
+            + tr("A Python refactor of <i>SOM tracking_v1.2b.ijm</i> "
+                 "(Wang, Ho &amp; Liao, NTOU 2020).<br><br>"
+                 "Computes locomotion and biophysical metrics from tracking "
+                 "coordinates, clusters them with self-organising maps and a "
+                 "registry of projections, and tests whether the groups really "
+                 "differ -- PERMANOVA, PERMDISP, the energy test and "
+                 "cross-validated classification against a permutation null -- "
+                 "before it lets a figure claim that they do.<br><br>"
+                 "Every run writes a conclusion report with a methods paragraph "
+                 "and a reference list. Figures export as editable-text PDF/SVG, "
+                 "600 dpi PNG and MP4."))
 
     def closeEvent(self, event) -> None:
         if self.runner.busy:
             answer = QMessageBox.question(
-                self, "A task is running", "Quit anyway and abandon the running task?")
+                self, tr("A task is running"),
+                tr("Quit anyway and abandon the running task?"))
             if answer != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return
@@ -471,4 +544,9 @@ class MainWindow(QMainWindow):
         event.accept()
 
 
-__all__ = ["MainWindow"]
+def _exception_text(exc: Exception) -> str:
+    """An exception's message, translated when it carries a translation."""
+    return render(exc.args[0]) if len(exc.args) == 1 else str(exc)
+
+
+__all__ = ["MainWindow", "STEP_TITLES"]

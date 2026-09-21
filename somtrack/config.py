@@ -324,6 +324,10 @@ class ReportConfig:
     citation_style: Literal["inline", "numbered"] = "inline"
     title: str = ""                              # blank -> generated
     authors: str = ""
+    # A complete translation written after the English report (and after the
+    # English methods.txt).  "zh_TW" = Traditional Chinese; "" = English only.
+    # Figures and table contents stay in English either way.
+    translation: str = "zh_TW"
 
 
 # --------------------------------------------------------------------------

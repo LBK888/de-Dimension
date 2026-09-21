@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .config import SomConfig
+from .i18n import Text
 
 SQRT3_2 = math.sqrt(3.0) / 2.0
 
@@ -371,7 +372,8 @@ def _train_supervised(X, cfg, lattice, rng, names, group_codes, n_groups,
                       sigma0, tau, progress):
     """XY-fused SOM: concatenate a weighted one-hot label block to the data."""
     if group_codes is None or n_groups < 2:
-        raise ValueError("Supervised SOM needs at least two experimental groups.")
+        raise ValueError(Text("Supervised SOM needs at least two experimental "
+                              "groups."))
 
     Y = np.zeros((X.shape[0], n_groups))
     Y[np.arange(X.shape[0]), group_codes] = 1.0
@@ -406,7 +408,8 @@ def _train_relevance(X, cfg, lattice, rng, names, group_codes, n_groups,
                      sigma0, tau, progress):
     """Batch SOM interleaved with GRLVQ relevance updates on the features."""
     if group_codes is None or n_groups < 2:
-        raise ValueError("Relevance SOM needs at least two experimental groups.")
+        raise ValueError(Text("Relevance SOM needs at least two experimental "
+                              "groups."))
 
     n, d = X.shape
     lam = np.ones(d) / d

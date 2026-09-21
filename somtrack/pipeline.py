@@ -22,6 +22,7 @@ from .analysis import run_projections
 from .association import AssociationBundle, analyse_associations
 from .citations import MethodsLog
 from .config import AnalysisConfig
+from .i18n import Clause, Text, join_list
 from .io_tables import FeatureDataset, SpotDataset
 from .metrics import compute_features
 from .nodecluster import NodeClustering, cluster_nodes
@@ -58,6 +59,8 @@ class AnalysisResult:
     verdict: Verdict | None = None
     projection_agreement: pd.DataFrame | None = None
     methods_log: MethodsLog = field(default_factory=MethodsLog)
+    # figure name -> what question the figure answers (a Text, so the report
+    # can print it in every language it is written in)
     figure_captions: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -184,7 +187,8 @@ def features_from_spots(spots: SpotDataset, config: AnalysisConfig,
                         progress: Progress | None = None) -> FeatureDataset:
     def cb(i, n):
         if progress:
-            progress(f"Computing metrics ({i}/{n} tracks)", i / max(n, 1))
+            progress(Text("Computing metrics ({i}/{n} tracks)", i=i, n=n),
+                     i / max(n, 1))
 
     return compute_features(spots, config.track,
                             selected=config.selected_features or None, progress=cb)
@@ -204,7 +208,7 @@ def run_analysis(
 
     log = MethodsLog()
 
-    say("Preparing feature matrix", 0.02)
+    say(Text("Preparing feature matrix"), 0.02)
     prep = prepare(features, config.preprocess,
                    selected=config.selected_features or None)
     warnings_ += prep.notes
@@ -221,34 +225,36 @@ def run_analysis(
                         or config.stats.unit_of_analysis == "replicate"))
 
     if prep.n_groups < 2 and config.som.algorithm in ("supervised", "relevance"):
-        warnings_.append(
-            f"'{config.som.algorithm}' SOM needs >= 2 groups; falling back to batch SOM."
-        )
+        warnings_.append(Text(
+            "'{algorithm}' SOM needs >= 2 groups; falling back to batch SOM.",
+            algorithm=config.som.algorithm))
         config.som.algorithm = "batch"
 
-    say("Training SOM", 0.06)
+    say(Text("Training SOM"), 0.06)
     som = train_som(
         prep.X, config.som, feature_names=prep.feature_names,
         group_codes=prep.group_codes, n_groups=prep.n_groups,
-        progress=lambda i, n: say(f"Training SOM (epoch {i}/{n})",
+        progress=lambda i, n: say(Text("Training SOM (epoch {i}/{n})", i=i, n=n),
                                   0.06 + 0.30 * i / max(n, 1)),
     )
     result.som = som
     result.quality = quality_report(som, prep.group_codes, prep.n_groups)
     _log_som(log, config, som)
 
-    say("Clustering nodes", 0.38)
+    say(Text("Clustering nodes"), 0.38)
     result.node_clusters = cluster_nodes(som, config.node_cluster, prep.group_codes)
     if result.node_clusters is not None and result.node_clusters.best_k:
         log.record("Clustering", "second-level clustering of the SOM codebook",
-                   f"{config.node_cluster.method} over k = {config.node_cluster.k_min}"
-                   f"-{config.node_cluster.k_max}, with k chosen by the average rank "
-                   f"of three internal validity indices",
+                   Text("{method} over k = {k_min}-{k_max}, with k chosen by the "
+                        "average rank of three internal validity indices",
+                        method=config.node_cluster.method,
+                        k_min=config.node_cluster.k_min,
+                        k_max=config.node_cluster.k_max),
                    citations=("vesanto2000", "rousseeuw1987", "davies1979",
                               "calinski1974"),
                    chosen_k=result.node_clusters.best_k)
 
-    say("Running projections", 0.44)
+    say(Text("Running projections"), 0.44)
     result.projections = _run_projections(result, config, prep, log, warnings_, say)
 
     if len(result.projections) > 1:
@@ -258,7 +264,7 @@ def run_analysis(
     if config.stats.enabled and prep.n_groups >= 2:
         _run_statistics(result, config, prep, log, say)
 
-    say("Testing metric-group associations", 0.92)
+    say(Text("Testing metric-group associations"), 0.92)
     result.associations = analyse_associations(prep, som, result.node_clusters)
     log.record("Statistics", "per-metric association tests",
                "one-way ANOVA and Kruskal-Wallis per metric with eta-squared and "
@@ -277,7 +283,7 @@ def run_analysis(
         supervised_used=any(p.supervised for p in result.projections.values()),
     )
 
-    say("Analysis complete", 1.0)
+    say(Text("Analysis complete"), 1.0)
     return result
 
 
@@ -294,11 +300,11 @@ def _run_projections(result, config, prep, log, warnings_, say):
         dropped = [m for m in methods if get_method(m).supervised]
         methods = [m for m in methods if m not in dropped]
         if dropped:
-            warnings_.append(
-                "Supervised projections (" + ", ".join(dropped) + ") were requested "
-                "but are off by default, because they separate groups by "
-                "construction. Enable them with embedding.allow_supervised = True "
-                "once the cross-validated result is in hand.")
+            warnings_.append(Text(
+                "Supervised projections ({methods}) were requested but are off by "
+                "default, because they separate groups by construction. Enable "
+                "them with embedding.allow_supervised = True once the "
+                "cross-validated result is in hand.", methods=join_list(dropped)))
 
     overrides = emb.resolved_overrides()
     # A supervised projection runs its own permutation test.  It should use the
@@ -319,7 +325,7 @@ def _run_projections(result, config, prep, log, warnings_, say):
         reliability_null=emb.reliability_null,
         stability_seeds=emb.stability_seeds,
         log=log, warn=warnings_.append,
-        progress=lambda i, n: say(f"Projections ({i}/{max(n, 1)})",
+        progress=lambda i, n: say(Text("Projections ({i}/{n})", i=i, n=max(n, 1)),
                                   0.44 + 0.20 * i / max(n, 1)),
     )
 
@@ -337,16 +343,17 @@ def _run_statistics(result, config, prep, log, say) -> None:
         X, y, _ = aggregate_to_units(X, y, structure)
         structure = analyse_blocks(y, None)
         log.record("Statistics", "aggregation to experimental units",
-                   "metrics were averaged within each replicate before testing, so "
-                   "the replicate rather than the individual is the unit of analysis",
+                   Text("metrics were averaged within each replicate before testing, "
+                        "so the replicate rather than the individual is the unit of "
+                        "analysis"),
                    citations=("hurlbert1984", "lazic2018"))
     elif structure.blocked:
         log.record("Statistics", "replicate-aware permutation and cross-validation",
-                   structure.note.rstrip("."),
+                   Clause(structure.note),
                    citations=("anderson2003", "hurlbert1984", "lazic2018"))
 
     if st.run_permanova or st.run_permdisp or st.run_energy:
-        say("Testing whether the groups differ", 0.68)
+        say(Text("Testing whether the groups differ"), 0.68)
         result.separation = analyse_separation(
             X, y, list(prep.group_values), structure,
             metric=st.distance, n_permutations=st.n_permutations,
@@ -356,7 +363,7 @@ def _run_statistics(result, config, prep, log, say) -> None:
         _log_separation(log, st, result.separation)
 
     if st.run_classification:
-        say("Cross-validating group assignment", 0.76)
+        say(Text("Cross-validating group assignment"), 0.76)
         result.classification = classify(
             X, y, list(prep.group_values), structure,
             model=st.classifier, scheme=st.cv_scheme, n_splits=st.cv_splits,
@@ -366,21 +373,22 @@ def _run_statistics(result, config, prep, log, say) -> None:
         _log_classification(log, st, result.classification)
 
     if st.run_importance:
-        say("Measuring which metrics matter", 0.84)
+        say(Text("Measuring which metrics matter"), 0.84)
         result.importance = permutation_importance(
             X, y, names, structure, model=st.importance_model,
             n_repeats=st.importance_repeats,
             cluster_threshold=st.cluster_threshold, scheme=st.cv_scheme,
             n_splits=st.cv_splits, random_state=st.random_state)
         log.record("Statistics", "permutation importance",
-                   f"cross-validated permutation importance scored by the loss in "
-                   f"balanced accuracy, computed per metric and per cluster of "
-                   f"metrics correlated above |r| = {st.cluster_threshold:g}",
+                   Text("cross-validated permutation importance scored by the "
+                        "loss in balanced accuracy, computed per metric and per "
+                        "cluster of metrics correlated above |r| = {r:g}",
+                        r=st.cluster_threshold),
                    citations=("breiman2001", "altmann2010", "brodersen2010"),
                    model=st.importance_model, repeats=st.importance_repeats)
 
     if st.run_effect_sizes:
-        say("Estimating effect sizes", 0.88)
+        say(Text("Estimating effect sizes"), 0.88)
         src = prep.source
         values = {}
         for name in names:
@@ -403,11 +411,15 @@ def _run_statistics(result, config, prep, log, say) -> None:
 def _log_preprocessing(log: MethodsLog, config: AnalysisConfig,
                        prep: PreparedData) -> None:
     pre = config.preprocess
-    detail = f"metrics were scaled with the {pre.scaler} transform"
     if 0 < pre.collinearity_threshold < 1:
-        detail += (f" and collinear metrics were pruned at "
-                   f"|r| > {pre.collinearity_threshold:g}")
-    detail += f"; missing values were handled by '{pre.nan_policy}'"
+        detail = Text("metrics were scaled with the {scaler} transform and "
+                      "collinear metrics were pruned at |r| > {r:g}; missing values "
+                      "were handled by '{nan_policy}'", scaler=pre.scaler,
+                      r=pre.collinearity_threshold, nan_policy=pre.nan_policy)
+    else:
+        detail = Text("metrics were scaled with the {scaler} transform; missing "
+                      "values were handled by '{nan_policy}'", scaler=pre.scaler,
+                      nan_policy=pre.nan_policy)
     log.record("Data preparation", "feature scaling and pruning", detail,
                n_samples=prep.n_samples, n_metrics=prep.n_features)
 
@@ -451,8 +463,9 @@ def _log_som(log: MethodsLog, config: AnalysisConfig, som) -> None:
 def _log_separation(log: MethodsLog, st, sep) -> None:
     if st.run_permanova:
         log.record("Statistics", "PERMANOVA",
-                   f"permutational multivariate analysis of variance on "
-                   f"{sep.metric} distances, with R-squared as the effect size",
+                   Text("permutational multivariate analysis of variance on "
+                        "{metric} distances, with R-squared as the effect size",
+                        metric=Text(sep.metric)),
                    citations=("anderson2001",), permutations=st.n_permutations,
                    distance=sep.metric)
     if st.run_permdisp:
@@ -478,10 +491,11 @@ def _log_classification(log: MethodsLog, st, cls) -> None:
 
     spec = MODELS.get(st.classifier, {})
     log.record("Statistics", "cross-validated classification",
-               f"{spec.get('detail', st.classifier)}, evaluated by "
-               f"{cls.cv_name} and scored by balanced accuracy; significance was "
-               f"assessed by shuffling the group labels rather than by a binomial "
-               f"test, which is anti-conservative for cross-validated accuracies",
+               Text("{model}, evaluated by {cv} and scored by balanced accuracy; "
+                    "significance was assessed by shuffling the group labels rather "
+                    "than by a binomial test, which is anti-conservative for "
+                    "cross-validated accuracies",
+                    model=Text(spec.get("detail", st.classifier)), cv=cls.cv_name),
                citations=tuple(spec.get("citations", ()))
                + ("brodersen2010", "ojala2010", "noirhomme2014", "cohen1960"),
                permutations=cls.n_permutations)
@@ -521,12 +535,14 @@ def build_figures(result: AnalysisResult,
         if not core and not full:
             return
         if progress:
-            progress(f"Rendering {name}", min(0.95, 0.05 + 0.04 * len(panels)))
+            progress(Text("Rendering {name}", name=name),
+                     min(0.95, 0.05 + 0.04 * len(panels)))
         try:
             panels.append((name, fn(*a, **kw)))
             captions[name] = why
         except Exception as exc:
-            result.warnings.append(f"Figure '{name}' skipped: {exc}")
+            result.warnings.append(Text("Figure '{name}' skipped: {error}",
+                                        name=name, error=str(exc)))
 
     # ---- 1. the conclusion and the evidence for it -----------------------
     if result.verdict is not None:
@@ -571,13 +587,14 @@ def build_figures(result: AnalysisResult,
     for i, feat in enumerate(top_metrics[:4]):
         add(f"08_superplot_{_slug(feat)}", viz.plot_superplot, prep, feat, cfg,
             core=(i < 2),
-            why=f"{feat} by group, showing every individual and each replicate's "
-                f"own mean.")
+            why=Text("{metric} by group, showing every individual and each "
+                     "replicate's own mean.", metric=feat))
     for i, feat in enumerate(top_metrics[:2]):
         add(f"09_estimation_{_slug(feat)}", viz.plot_estimation, prep, feat, cfg,
             core=(i == 0),
             reference=result.config.stats.effect_reference_group,
-            why=f"{feat}: the size of the difference, with its uncertainty.")
+            why=Text("{metric}: the size of the difference, with its uncertainty.",
+                     metric=feat))
 
     # ---- 2. projections ---------------------------------------------------
     if result.projections:
@@ -595,17 +612,19 @@ def build_figures(result: AnalysisResult,
             add(f"13_{_slug(key)}", viz.plot_embedding, proj, prep, cfg,
                 core=(key in ("pca", "pacmap", "umap")),
                 highlight=(assoc.top_features(8) if assoc else None),
-                why=f"{proj.name} projection with metric-direction arrows.")
+                why=Text("{method} projection with metric-direction arrows.",
+                         method=proj.name))
             if proj.dubious is not None and proj.n_dubious:
                 add(f"14_reliability_{_slug(key)}", viz.plot_point_reliability,
                     proj, prep, cfg,
-                    why=f"Which points {proj.name} placed unreliably.")
+                    why=Text("Which points {method} placed unreliably.",
+                             method=proj.name))
             if proj.supervised and proj.oof_coords is not None:
                 add(f"15_validated_{_slug(key)}", viz.plot_supervised_check,
                     proj, prep, cfg, core=True,
-                    why=f"{proj.name} in-sample against out-of-fold -- the panel "
-                        f"that separates a real difference from one the method "
-                        f"was handed.")
+                    why=Text("{method} in-sample against out-of-fold -- the "
+                             "panel that separates a real difference from one the "
+                             "method was handed.", method=proj.name))
         if result.projection_agreement is not None:
             add("16_projection_agreement", viz.plot_agreement,
                 result.projection_agreement, cfg,
@@ -664,14 +683,14 @@ def build_figures(result: AnalysisResult,
                     "same bearing are redundant.")
             if top:
                 add("32_gradient_field", viz.plot_gradient_field, som, prep, cfg,
-                    top[0], why=f"{top[0]} across the map.")
+                    top[0], why=Text("{metric} across the map.", metric=top[0]))
 
         if assoc is not None and assoc.enrichment is not None and not assoc.enrichment.empty:
             for g in range(min(prep.n_groups, 4)):
                 add(f"33_enrichment_{_slug(prep.group_values[g])}",
                     viz.plot_group_enrichment_map, som, prep, assoc.enrichment, cfg, g,
-                    why=f"Where {prep.group_values[g]} sits more often than "
-                        f"chance predicts.")
+                    why=Text("Where {group} sits more often than chance "
+                             "predicts.", group=str(prep.group_values[g])))
 
         add("34_training_curves", viz.plot_training_curves, som, cfg,
             why="Training diagnostics for the map.")
@@ -692,7 +711,7 @@ def build_figures(result: AnalysisResult,
 
     result.figure_captions = captions
     if progress:
-        progress("Figures complete", 1.0)
+        progress(Text("Figures complete"), 1.0)
     return panels
 
 
@@ -719,7 +738,7 @@ def export_all(result: AnalysisResult,
         panels = build_figures(result, progress)
 
     if progress:
-        progress("Writing figures", 0.4)
+        progress(Text("Writing figures"), 0.4)
     for name, panel in panels:
         ex.save_panel(panel, name, cfg, manifest, close=False)
 
@@ -729,30 +748,32 @@ def export_all(result: AnalysisResult,
 
     if cfg.save_tables:
         if progress:
-            progress("Writing tables", 0.7)
+            progress(Text("Writing tables"), 0.7)
         tables = result.tables()
         for name, df in tables.items():
             ex.save_table(df, name, cfg, manifest)
         try:
             ex.save_tables_workbook(tables, out / "SOMTrack_tables.xlsx")
         except Exception as exc:
-            result.warnings.append(f"Excel workbook not written: {exc}")
+            result.warnings.append(Text("Excel workbook not written: {error}",
+                                        error=str(exc)))
 
     if cfg.mp4 and result.som is not None:
         if progress:
-            progress("Rendering animation", 0.82)
+            progress(Text("Rendering animation"), 0.82)
         try:
             path = viz.animate_training(result.som, result.prep, result.config.figure,
                                         cfg, out / "videos" / "som_training")
             manifest.videos.append(str(path))
         except Exception as exc:
-            result.warnings.append(f"Training animation skipped: {exc}")
+            result.warnings.append(Text("Training animation skipped: {error}",
+                                        error=str(exc)))
 
     ex.save_config(result.config, cfg)
 
     if result.config.report.enabled:
         if progress:
-            progress("Writing the report", 0.9)
+            progress(Text("Writing the report"), 0.9)
         try:
             rep = build_report(result)
             rep.figures = [(name, result.figure_captions.get(name, ""))
@@ -761,11 +782,12 @@ def export_all(result: AnalysisResult,
                 manifest.tables.append(str(path))
             manifest.tables.append(str(write_methods_text(rep, out / "methods.txt")))
         except Exception as exc:
-            result.warnings.append(f"Report not written: {exc}")
+            result.warnings.append(Text("Report not written: {error}",
+                                        error=str(exc)))
 
     if result.config.figure.cvd_proof and panels:
         if progress:
-            progress("Rendering the colour check", 0.95)
+            progress(Text("Rendering the colour check"), 0.95)
         try:
             proofs = out / "figures" / "colour_check"
             proofs.mkdir(parents=True, exist_ok=True)
@@ -775,7 +797,8 @@ def export_all(result: AnalysisResult,
                               facecolor="white")
                 _close(proof)
         except Exception as exc:
-            result.warnings.append(f"Colour check not written: {exc}")
+            result.warnings.append(Text("Colour check not written: {error}",
+                                        error=str(exc)))
 
     manifest.write()
 
@@ -785,7 +808,7 @@ def export_all(result: AnalysisResult,
         plt.close(panel.fig)
 
     if progress:
-        progress("Export complete", 1.0)
+        progress(Text("Export complete"), 1.0)
     return manifest
 
 
