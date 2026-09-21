@@ -1,0 +1,17 @@
+# the environment install.bat builds -- everything in it is reinstallable,
+# and it is ~500 MB of platform-specific binaries
+.venv/
+__pycache__/
+*.py[cod]
+
+# analysis output
+somtrack_output/
+somtrack_demo/
+somtrack_scan/
+demo_data/
+*.egg-info/
+build/
+dist/
+
+.pytest_cache/
+.ruff_cache/

@@ -1,0 +1,28 @@
+# core
+numpy>=1.24
+pandas>=2.0
+scipy>=1.10
+scikit-learn>=1.3
+matplotlib>=3.7
+joblib>=1.3
+openpyxl>=3.1
+
+# desktop UI
+PySide6>=6.5
+
+# optional projections -- each is skipped with an explanation if missing,
+# and the omission is recorded in the report rather than passing unnoticed
+pacmap>=0.7           # PaCMAP: best local/global trade-off, barely needs tuning
+umap-learn>=0.5       # UMAP, densMAP and supervised UMAP
+phate>=1.0            # PHATE: for dose / time / developmental gradients
+
+# optional colour -- both have built-in fallbacks
+glasbey>=0.2          # maximally distinct categorical colours above ten groups
+cmcrameri>=1.7        # Crameri's perceptually uniform scientific colour maps
+
+# optional performance and geometry
+numba>=0.58           # JIT for the online SOM on very large data sets
+shapely>=2.0          # smooth merged outlines for node clusters
+
+# MP4 export additionally needs ffmpeg on PATH (https://ffmpeg.org/download.html);
+# without it SOMTrack falls back to an animated GIF.
