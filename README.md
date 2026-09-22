@@ -1,3 +1,5 @@
+**English** | [繁體中文](README_TW.md)
+
 # SOMTrack 3.0
 
 Locomotion metrics, multivariate analysis and publication figures for tracking
@@ -434,6 +436,9 @@ python -m somtrack run features.csv --features-table \
 # also run the supervised projections, with their guard rail
 python -m somtrack run features.csv --features-table --allow-supervised -o results
 
+# English report only, without the Chinese translation
+python -m somtrack run features.csv --features-table --translation none -o results
+
 # scan a projection's hyper-parameters, scored by unreliable-point count
 python -m somtrack scan features.csv --features-table \
     --method tsne --criterion dubious_fraction -o scan
@@ -464,6 +469,7 @@ feats = pipeline.features_from_spots(spots, cfg)
 res = pipeline.run_analysis(feats, cfg)
 
 print(res.verdict.text())                       # the conclusion, in words
+print(res.verdict.text().render("zh_TW"))       # the same conclusion, in Chinese
 print(res.separation.permanova_R2, res.separation.permanova_p)
 print(res.classification.summary_line())
 pipeline.export_all(res)                        # figures, tables and the report
@@ -587,7 +593,8 @@ Results open on the conclusion, not on a gallery.
 It opens in the language chosen from the **Language / 語言** menu; before
 anything has been chosen, in the language named by the `SOMTRACK_LANG`
 environment variable (`zh_TW` or `en`); failing that, in the system's language
--- so a Taiwanese Windows installation opens in Chinese the first time. Every
+-- so a Taiwanese Windows installation opens in Chinese the first time. A new
+choice takes effect on restart, which the app offers to do straight away. Every
 label, hint, tooltip and log message is translated, and so is the text that
 comes from the registries: method summaries and caveats, parameter names and
 their help, the metric catalogue and the recipes. Option lists show a
