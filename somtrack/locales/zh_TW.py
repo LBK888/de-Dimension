@@ -278,6 +278,69 @@ MESSAGES: dict[str, str] = {
         "我了解監督式投影在建構上就會把組別分開",
     "not installed": "未安裝",
     "not included in the Windows executable": "Windows 執行檔未包含此方法",
+
+    # PyTorch, downloaded on request by the full executable
+    "needs PyTorch": "需要 PyTorch",
+    "Download PyTorch...": "下載 PyTorch...",
+    "PyTorch is downloaded once, in the build that suits this computer: with GPU "
+    "support for a suitable NVIDIA card, otherwise the much smaller CPU build. You "
+    "are asked before anything is downloaded.":
+        "PyTorch 只需下載一次，並會選擇適合這台電腦的版本：有合適的 NVIDIA 顯示卡時"
+        "下載 GPU 版，否則下載小得多的 CPU 版。下載前會先詢問你。",
+    "{method} needs PyTorch, which is downloaded the first time it is wanted: "
+    "press 'Download PyTorch...' beside {method} on the Analysis page, or run "
+    "'SOMTrack.exe install-torch'.":
+        "{method} 需要 PyTorch，第一次使用時才會下載：請按「分析」頁面中 {method} "
+        "旁的「下載 PyTorch...」，或執行「SOMTrack.exe install-torch」。",
+    "Looking for the right PyTorch build...": "正在尋找合適的 PyTorch 版本...",
+    "with GPU support (CUDA {cuda})": "GPU 版（CUDA {cuda}）",
+    "for the CPU": "CPU 版",
+    "SLISEMAP needs PyTorch. It is downloaded once and kept in\n{path}\n\n"
+    "{reason}.\n\nDownload PyTorch {version} {kind}, {size}?":
+        "SLISEMAP 需要 PyTorch。它只需下載一次，並存放在\n{path}\n\n"
+        "{reason}。\n\n要下載 PyTorch {version} {kind}嗎？大小約 {size}。",
+    "Download PyTorch": "下載 PyTorch",
+    "Downloading PyTorch...": "正在下載 PyTorch...",
+    "Downloading PyTorch {version} from download.pytorch.org":
+        "正在從 download.pytorch.org 下載 PyTorch {version}",
+    "the CPU": "CPU",
+    "PyTorch {version} is ready and runs on {device}. SLISEMAP can now be ticked.":
+        "PyTorch {version} 已就緒，在 {device} 上執行。現在可以勾選 SLISEMAP 了。",
+    "Downloading PyTorch ({done} of {total})": "正在下載 PyTorch（{done}／{total}）",
+    "Unpacking PyTorch": "正在解壓縮 PyTorch",
+    "Checking PyTorch": "正在檢查 PyTorch",
+    "PyTorch is ready": "PyTorch 已就緒",
+    "The PyTorch download was damaged (its checksum does not match). Please try "
+    "again.": "下載的 PyTorch 檔案已損毀（檢查碼不符）。請再試一次。",
+    "Not enough free disk space for PyTorch: about {need} is needed on the drive "
+    "holding {path}.":
+        "磁碟空間不足，無法安裝 PyTorch：{path} 所在的磁碟需要約 {need} 的可用空間。",
+    "The GPU build of PyTorch could not use the GPU ({error}); the CPU build is "
+    "used instead.": "GPU 版 PyTorch 無法使用 GPU（{error}），改用 CPU 版。",
+    "PyTorch was downloaded but does not start: {error}":
+        "PyTorch 已下載，但無法啟動：{error}",
+    "PyTorch could not be found on download.pytorch.org ({error}). Check the "
+    "internet connection and try again.":
+        "在 download.pytorch.org 上找不到 PyTorch（{error}）。請檢查網路連線後再試一次。",
+    "the CPU build was asked for": "已指定使用 CPU 版",
+    "{channel} has no PyTorch for Python {python}":
+        "{channel} 頻道沒有 Python {python} 用的 PyTorch",
+    "{why}, but no GPU build of PyTorch exists for this Python, so the CPU build":
+        "{why}，但沒有適用於此 Python 版本的 GPU 版 PyTorch，因此使用 CPU 版",
+    "no NVIDIA GPU was found": "沒有找到 NVIDIA 顯示卡",
+    "{name} was found but the driver's CUDA version could not be read":
+        "找到 {name}，但讀不到驅動程式支援的 CUDA 版本",
+    "{name}, driver supports CUDA {cuda}": "{name}，驅動程式支援 CUDA {cuda}",
+    "{name} is a Blackwell card and needs CUDA {needs} or newer, but the driver "
+    "only supports {have} -- updating the NVIDIA driver would enable GPU support":
+        "{name} 是 Blackwell 架構的顯示卡，需要 CUDA {needs} 以上，但驅動程式只支援 "
+        "{have}——更新 NVIDIA 驅動程式即可啟用 GPU 支援",
+    "{name} needs CUDA {needs} or newer, but the driver only supports {have} -- "
+    "updating the NVIDIA driver would enable GPU support":
+        "{name} 需要 CUDA {needs} 以上，但驅動程式只支援 {have}——"
+        "更新 NVIDIA 驅動程式即可啟用 GPU 支援",
+    "{name}, but no matching PyTorch build is published":
+        "找到 {name}，但沒有對應的 PyTorch 版本",
     "{method} is not included in the Windows executable; install SOMTrack with "
     "install.bat to use it.":
         "Windows 執行檔未包含 {method}；若要使用，請以 install.bat 安裝 SOMTrack。",

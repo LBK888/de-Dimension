@@ -221,6 +221,7 @@ class MainWindow(QMainWindow):
         self.analysis_page.recipe_selected.connect(self.export_page.adopt_recipe)
         self.metrics_page.compute_requested.connect(self._compute_metrics)
         self.analysis_page.run_requested.connect(self._run_analysis)
+        self.analysis_page.torch_requested.connect(self._get_torch)
         self.export_page.export_requested.connect(self._export)
 
         # Follow the system if it switches between light and dark while open.
@@ -437,6 +438,49 @@ class MainWindow(QMainWindow):
         self.results_page.show_result(result, panels)
         self.compare_page.show_result(result)
         self._go_to(self.pages.index(self.results_page))
+
+    # ------------------------------------------------------------------
+    def _get_torch(self) -> None:
+        """Find, confirm and download the PyTorch build for this computer."""
+        if self.runner.busy:
+            return
+        from .. import addons
+
+        self._busy(True, tr("Looking for the right PyTorch build..."))
+        self.runner.start(lambda progress=None: addons.plan(), self._torch_planned,
+                          self._on_progress, self._on_error)
+
+    def _torch_planned(self, plan) -> None:
+        from .. import addons
+
+        self._busy(False)
+        kind = (tr("with GPU support (CUDA {cuda})").format(cuda=plan.cuda)
+                if plan.cuda else tr("for the CPU"))
+        text = tr(
+            "SLISEMAP needs PyTorch. It is downloaded once and kept in\n{path}\n\n"
+            "{reason}.\n\nDownload PyTorch {version} {kind}, {size}?").format(
+                path=addons.home(), reason=render(plan.reason),
+                version=plan.version.split("+")[0], kind=kind,
+                size=addons.human_size(plan.size))
+        answer = QMessageBox.question(self, tr("Download PyTorch"), text)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self._busy(True, tr("Downloading PyTorch..."))
+        self._log(tr("Downloading PyTorch {version} from download.pytorch.org").format(
+            version=plan.version))
+        self.runner.start(
+            lambda progress=None: addons.install_planned(plan, progress=progress),
+            self._torch_installed, self._on_progress, self._on_error)
+
+    def _torch_installed(self, info: dict) -> None:
+        self._busy(False)
+        for note in info.get("notes", []):
+            self._log(note, "warn")
+        where = info.get("device") or tr("the CPU")
+        self._log(tr("PyTorch {version} is ready and runs on {device}. SLISEMAP "
+                     "can now be ticked.").format(version=info.get("version", ""),
+                                                  device=where), "ok")
+        self.analysis_page.refresh_availability()
 
     # ------------------------------------------------------------------
     def _run_scan(self, method: str, criterion: str) -> None:

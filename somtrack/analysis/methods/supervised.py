@@ -384,7 +384,8 @@ register(MethodSpec(
         "by finding the local model that explains it, which requires that "
         "point's own label, so a held-out point could only be placed by handing "
         "the method the answer. Treat every SLISEMAP figure as in-sample."),
-    available=has_module("slisemap"),
+    available=lambda: has_module("slisemap")() and has_module("torch")(),
+    needs_torch=True,
     install_hint="SLISEMAP needs:  pip install slisemap   (it pulls in PyTorch)",
     summary="Places samples by which metrics explain them, so you can see "
             "whether a treatment acts the same way on every individual.",

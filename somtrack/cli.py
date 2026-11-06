@@ -134,6 +134,14 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("metrics", help="list every available metric")
     sub.add_parser("methods",
                    help="list every projection method and its parameters")
+    torch_ = sub.add_parser(
+        "install-torch",
+        help="Windows executable: download the PyTorch build that suits this "
+             "computer, for SLISEMAP")
+    torch_.add_argument("--cpu", action="store_true",
+                        help="the CPU build even if a suitable GPU is present")
+    torch_.add_argument("-y", "--yes", action="store_true",
+                        help="do not ask before downloading")
     return ap
 
 
@@ -362,7 +370,9 @@ def cmd_methods(_args) -> int:
         print(f"\n{title}")
         print("-" * len(title))
         for spec in specs:
+            torch_only = frozen and spec.needs_torch and spec.bundled()
             mark = ("" if spec.available() else
+                    "   [needs PyTorch]" if torch_only else
                     "   [not included in the Windows executable]" if frozen
                     else "   [not installed]")
             print(f"\n  {spec.key:16s} {spec.label}{mark}")
@@ -373,7 +383,9 @@ def cmd_methods(_args) -> int:
             if spec.caveat:
                 print(f"    note: {spec.caveat}")
             if not spec.available():
-                if frozen:      # pip means nothing inside the executable
+                if torch_only:
+                    print("    download PyTorch with:  SOMTrack.exe install-torch")
+                elif frozen:    # pip means nothing inside the executable
                     print("    install SOMTrack with install.bat to use it")
                 elif spec.install_hint:
                     print(f"    {spec.install_hint}")
@@ -413,6 +425,36 @@ def cmd_metrics(_args) -> int:
     return 0
 
 
+def cmd_install_torch(args) -> int:
+    """Download PyTorch for the Windows executable (see somtrack/addons.py)."""
+    from . import addons
+
+    if not addons.supported():
+        print("Only the Windows executable downloads PyTorch itself. In a source "
+              "installation run:  python tools/install_torch.py")
+        return 1
+    have = addons.installed()
+    if have:
+        print(f"installed: PyTorch {have.get('version')} "
+              f"({have.get('device') or 'CPU'})")
+    print("looking for the right PyTorch build ...", flush=True)
+    p = addons.plan(cpu_only=args.cpu)
+    kind = f"with GPU support (CUDA {p.cuda})" if p.cuda else "for the CPU"
+    print(f"  {p.reason}")
+    print(f"  PyTorch {p.version.split('+')[0]} {kind}, "
+          f"{addons.human_size(p.size)}, into {addons.home()}")
+    if not args.yes:
+        if input("download it? [y/N] ").strip().lower() not in ("y", "yes"):
+            return 1
+    info = addons.install_planned(p, progress=_progress)
+    print()
+    for note in info.get("notes", []):
+        print(f"  note: {note}")
+    print(f"PyTorch {info['version']} is ready and runs on "
+          f"{info.get('device') or 'the CPU'}.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     from .parallel import ensure_spawnable
 
@@ -420,7 +462,8 @@ def main(argv: list[str] | None = None) -> int:
     ensure_spawnable()
     args = _build_parser().parse_args(argv)
     return {"run": cmd_run, "scan": cmd_scan, "demo": cmd_demo,
-            "metrics": cmd_metrics, "methods": cmd_methods}[args.command](args)
+            "metrics": cmd_metrics, "methods": cmd_methods,
+            "install-torch": cmd_install_torch}[args.command](args)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,14 @@
+# Added to requirements-exe.txt for the full Windows executable
+# (packaging\build_exe.bat full).  SLISEMAP itself is installed with --no-deps,
+# because its requirements would pull PyTorch in, and PyTorch is never bundled:
+# the app downloads the build that suits the GPU when it is first wanted.
+phate>=1.0
+seaborn>=0.12          # SLISEMAP's plotting helpers
+# what PyTorch imports from outside itself, so a downloaded PyTorch can start
+sympy>=1.13
+mpmath>=1.1
+networkx>=2.5
+jinja2>=3.0
+fsspec>=0.8
+filelock>=3.0
+typing_extensions>=4.10

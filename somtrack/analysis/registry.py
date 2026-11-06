@@ -146,6 +146,10 @@ class MethodSpec:
     # with no honest validation panel needs a *stronger* warning than one that
     # has it, not a quiet exemption.
     no_out_of_fold_reason: str = ""
+    # Needs PyTorch.  The full Windows executable carries the method but not
+    # PyTorch, which it downloads on request (somtrack/addons.py).
+    needs_torch: bool = False
+    module: str = ""                # the package to look for, if not the key
     min_samples: int = 3
 
     def __post_init__(self) -> None:
@@ -160,6 +164,11 @@ class MethodSpec:
                 f"'{self.key}' is unsupervised, so an out-of-fold panel is not "
                 f"something it needs to explain away."
             )
+
+    def bundled(self) -> bool:
+        """The method's own package is present, PyTorch aside."""
+        return has_module(self.module or self.key)() if self.needs_torch else \
+            self.available()
 
     @property
     def supports_out_of_fold(self) -> bool:
@@ -199,6 +208,12 @@ class MethodSpec:
             import sys
 
             if getattr(sys, "frozen", False):     # the Windows executable
+                if self.needs_torch and self.bundled():
+                    return False, Text(
+                        "{method} needs PyTorch, which is downloaded the first "
+                        "time it is wanted: press 'Download PyTorch...' beside "
+                        "{method} on the Analysis page, or run 'SOMTrack.exe "
+                        "install-torch'.", method=self.label)
                 return False, Text(
                     "{method} is not included in the Windows executable; install "
                     "SOMTrack with install.bat to use it.", method=self.label)

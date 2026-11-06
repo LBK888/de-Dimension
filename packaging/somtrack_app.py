@@ -14,6 +14,11 @@ would open one more SOMTrack window per worker.
 **numba caches compiled code next to the source**, which inside the bundle is
 not writable, so UMAP and PaCMAP would fail on import.  The cache goes to
 ``%LOCALAPPDATA%\\SOMTrack\\numba_cache`` instead.
+
+**PyTorch is not in the bundle.**  The full build downloads it on request
+(somtrack/addons.py); a download that was accepted is put on ``sys.path``
+here, in workers too, and ``--somtrack-check-torch <dir>`` is the separate
+process that tries a fresh download on the GPU before it is accepted.
 """
 
 from __future__ import annotations
@@ -29,10 +34,19 @@ def _set_up_environment() -> None:
     os.makedirs(cache, exist_ok=True)
     os.environ.setdefault("NUMBA_CACHE_DIR", cache)
 
+    from somtrack import addons
+
+    addons.activate(clean=False)
+
 
 def _run_child_process() -> bool:
     """Run a worker / tracker process and return True, or return False."""
     argv = sys.argv
+    if len(argv) == 3 and argv[1] == "--somtrack-check-torch":
+        from somtrack.addons import _check_main
+
+        _check_main(argv[2])
+        return True
     if len(argv) >= 2 and argv[1] == "--multiprocessing-fork":
         if len(argv) == 3 and "=" not in argv[2]:            # a loky worker
             from joblib.externals.loky.backend.popen_loky_win32 import main
@@ -58,6 +72,9 @@ def main() -> int:
     _set_up_environment()
     if _run_child_process():
         return 0
+    from somtrack import addons
+
+    addons.activate(clean=True)          # tidy away replaced downloads
     from somtrack.__main__ import main as somtrack_main
 
     return somtrack_main()

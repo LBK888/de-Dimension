@@ -22,15 +22,27 @@ paragraph and a reference list for every algorithm it actually used.
 
 ### Installing
 
-**Windows, nothing to install.** Download `SOMTrack-<version>-windows-x64.zip`
-from the [Releases](https://github.com/LBK888/de-Dimension/releases) page,
-unzip it anywhere and double-click **`SOMTrack.exe`** inside the folder. It
-carries its own Python and every package except three: PHATE, SLISEMAP and the
-PyTorch that SLISEMAP needs (several GB with GPU support). The app lists those
-methods as not included in the executable; for them, use `install.bat` below.
-The first start is slower while caches are built. With arguments the same
-program is the command line: `SOMTrack.exe run data.csv --features-table -o
-results`. It is built by [`packaging/build_exe.bat`](packaging/build_exe.bat).
+**Windows, nothing to install.** Download a zip from the
+[Releases](https://github.com/LBK888/de-Dimension/releases) page, unzip it
+anywhere and double-click **`SOMTrack.exe`** inside the folder. It carries its
+own Python and its packages. There are two:
+
+| Zip | Holds |
+|---|---|
+| `SOMTrack-<version>-windows-x64.zip` | everything except PHATE and SLISEMAP |
+| `SOMTrack-<version>-windows-x64-full.zip` | PHATE and SLISEMAP too |
+
+SLISEMAP needs PyTorch, which neither zip contains: with GPU support it is
+about 3 GB. In the full build, **Download PyTorch...** beside SLISEMAP on the
+Analysis page (or `SOMTrack.exe install-torch`) fetches it once, in the build
+that suits the computer: it reads the NVIDIA card and driver, takes the newest
+CUDA build the driver can run -- CUDA 12.8 or newer for an RTX 50-series card
+-- and accepts it only after it has actually run on the GPU, falling back to
+the CPU build (about 120 MB) otherwise. It is kept in
+`%LOCALAPPDATA%\SOMTrack\addons`. The first start is slower while caches are
+built. With arguments the same program is the command line:
+`SOMTrack.exe run data.csv --features-table -o results`. Both are built by
+[`packaging/build_exe.bat`](packaging/build_exe.bat).
 
 **Windows, no Python experience needed.** Double-click **`install.bat`**, then
 **`start.bat`**. The installer checks for Python 3.10+, builds a private

@@ -10,7 +10,14 @@
 
 ### 安裝
 
-**Windows，免安裝。** 從 [Releases](https://github.com/LBK888/de-Dimension/releases) 頁面下載 `SOMTrack-<版本>-windows-x64.zip`，解壓縮到任何位置，雙擊資料夾中的 **`SOMTrack.exe`** 即可。它自帶 Python 與所有套件，只有三項例外：PHATE、SLISEMAP，以及 SLISEMAP 需要的 PyTorch（含 GPU 支援時達數 GB）。程式會把這些方法標示為「Windows 執行檔未包含此方法」；需要時請改用下方的 `install.bat`。第一次啟動需要建立快取，會稍慢一些。加上參數時，同一個程式就是命令列：`SOMTrack.exe run data.csv --features-table -o results`。執行檔由 [`packaging/build_exe.bat`](packaging/build_exe.bat) 建置。
+**Windows，免安裝。** 從 [Releases](https://github.com/LBK888/de-Dimension/releases) 頁面下載 zip 檔，解壓縮到任何位置，雙擊資料夾中的 **`SOMTrack.exe`** 即可。它自帶 Python 與所需套件，共有兩種：
+
+| zip 檔 | 內容 |
+|---|---|
+| `SOMTrack-<版本>-windows-x64.zip` | PHATE 與 SLISEMAP 以外的全部功能 |
+| `SOMTrack-<版本>-windows-x64-full.zip` | 另含 PHATE 與 SLISEMAP |
+
+SLISEMAP 需要 PyTorch，但兩種 zip 都不含 PyTorch：含 GPU 支援時約 3 GB。在完整版中，按下「分析」頁面 SLISEMAP 旁的「**下載 PyTorch...**」（或執行 `SOMTrack.exe install-torch`），就會下載一次適合這台電腦的版本：程式會讀取 NVIDIA 顯示卡與驅動程式，選擇驅動程式能執行的最新 CUDA 版本（RTX 50 系列需要 CUDA 12.8 以上），並且只有在它實際於 GPU 上執行成功後才採用；否則改用 CPU 版（約 120 MB）。下載的檔案存放在 `%LOCALAPPDATA%\SOMTrack\addons`。第一次啟動需要建立快取，會稍慢一些。加上參數時，同一個程式就是命令列：`SOMTrack.exe run data.csv --features-table -o results`。兩種執行檔都由 [`packaging/build_exe.bat`](packaging/build_exe.bat) 建置。
 
 **Windows，不需要任何 Python 經驗。** 雙擊 **`install.bat`**，再雙擊 **`start.bat`**。安裝程式會檢查是否有 Python 3.10 以上版本、在 `.venv\` 建立獨立環境、把所有套件安裝進去，並回報最後有哪些投影方法可用。所有東西都不會安裝到系統層級，因此不會干擾其他 Python 專案；刪除 `.venv\` 即可完全復原。重複執行安裝程式既安全又快速。
 

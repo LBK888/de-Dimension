@@ -6,17 +6,30 @@ rem ===================================================================
 rem  Build the Windows executable: a folder holding SOMTrack.exe, and a
 rem  zip of it for a GitHub release.
 rem
+rem    packaging\build_exe.bat          the standard build
+rem    packaging\build_exe.bat full     adds PHATE and SLISEMAP; PyTorch is
+rem                                     downloaded by the app when wanted
+rem
 rem  Everything is built outside the source tree -- by default in
 rem  %LOCALAPPDATA%\SOMTrack-build -- so a synced or backed-up project
 rem  folder does not pick up ~1 GB of build files.  Set SOMTRACK_BUILD_DIR
 rem  to put it somewhere else.
-rem
-rem    packaging\build_exe.bat
 rem ===================================================================
 
 if "%SOMTRACK_BUILD_DIR%"=="" set "SOMTRACK_BUILD_DIR=%LOCALAPPDATA%\SOMTrack-build"
 set "VENV=%SOMTRACK_BUILD_DIR%\venv"
 set "PYEXE=%VENV%\Scripts\python.exe"
+
+set "SOMTRACK_FULL="
+set "SUFFIX="
+set "DIST=%SOMTRACK_BUILD_DIR%\dist"
+set "WORK=%SOMTRACK_BUILD_DIR%\work"
+if /i "%~1"=="full" (
+    set "SOMTRACK_FULL=1"
+    set "SUFFIX=-full"
+    set "DIST=%SOMTRACK_BUILD_DIR%\dist-full"
+    set "WORK=%SOMTRACK_BUILD_DIR%\work-full"
+)
 
 if not exist "%PYEXE%" (
     echo  Creating the build environment in %VENV% ...
@@ -29,6 +42,11 @@ if not exist "%PYEXE%" (
 
 "%PYEXE%" -m pip install --quiet --upgrade pip
 "%PYEXE%" -m pip install --quiet -r packaging\requirements-exe.txt || exit /b 1
+if "%SOMTRACK_FULL%"=="1" (
+    "%PYEXE%" -m pip install --quiet -r packaging\requirements-exe-full.txt || exit /b 1
+    rem  --no-deps: SLISEMAP would pull PyTorch in, which is never bundled
+    "%PYEXE%" -m pip install --quiet --no-deps slisemap || exit /b 1
+)
 
 rem the version number, for the name of the zip
 "%PYEXE%" packaging\version.py > "%SOMTRACK_BUILD_DIR%\version.txt" || exit /b 1
@@ -36,18 +54,18 @@ set /p VERSION=<"%SOMTRACK_BUILD_DIR%\version.txt"
 
 set "PYTHONPATH=%CD%"
 "%PYEXE%" -m PyInstaller --noconfirm --clean ^
-    --distpath "%SOMTRACK_BUILD_DIR%\dist" --workpath "%SOMTRACK_BUILD_DIR%\work" ^
+    --distpath "%DIST%" --workpath "%WORK%" ^
     packaging\somtrack.spec || exit /b 1
 
-copy /y LICENSE "%SOMTRACK_BUILD_DIR%\dist\SOMTrack\LICENSE.txt" >nul
-copy /y README.md "%SOMTRACK_BUILD_DIR%\dist\SOMTrack\README.md" >nul
-copy /y README_TW.md "%SOMTRACK_BUILD_DIR%\dist\SOMTrack\README_TW.md" >nul
+copy /y LICENSE "%DIST%\SOMTrack\LICENSE.txt" >nul
+copy /y README.md "%DIST%\SOMTrack\README.md" >nul
+copy /y README_TW.md "%DIST%\SOMTrack\README_TW.md" >nul
 
-set "ZIP=%SOMTRACK_BUILD_DIR%\SOMTrack-%VERSION%-windows-x64.zip"
+set "ZIP=%SOMTRACK_BUILD_DIR%\SOMTrack-%VERSION%-windows-x64%SUFFIX%.zip"
 if exist "%ZIP%" del "%ZIP%"
-powershell -NoProfile -Command "Compress-Archive -Path '%SOMTRACK_BUILD_DIR%\dist\SOMTrack' -DestinationPath '%ZIP%'" || exit /b 1
+powershell -NoProfile -Command "Compress-Archive -Path '%DIST%\SOMTrack' -DestinationPath '%ZIP%'" || exit /b 1
 
 echo.
-echo  Built:  %SOMTRACK_BUILD_DIR%\dist\SOMTrack\SOMTrack.exe
+echo  Built:  %DIST%\SOMTrack\SOMTrack.exe
 echo  Zip:    %ZIP%
 endlocal

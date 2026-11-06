@@ -716,6 +716,7 @@ class ClusterPage(Page):
                 "sensible default; open a section only if you want to change it.")
 
     run_requested = Signal()
+    torch_requested = Signal()              # "Download PyTorch..." was pressed
 
     def build(self) -> None:
         from .. import recipes
@@ -724,6 +725,7 @@ class ClusterPage(Page):
 
         self._panels: dict[str, MethodPanel] = {}
         self._boxes: dict[str, QCheckBox] = {}
+        self._torch_buttons: dict[str, QPushButton] = {}
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -788,21 +790,31 @@ class ClusterPage(Page):
             for spec in specs:
                 box = QCheckBox(spec.label)
                 set_tip(box, tr(spec.summary))
-                ok, why = True, ""
-                if not spec.available():
-                    import sys
-
-                    ok = False
-                    why = tr(spec.install_hint) if spec.install_hint else tr(
-                        "not installed")
-                    if getattr(sys, "frozen", False):   # pip means nothing here
-                        why = tr("not included in the Windows executable")
-                if not ok:
-                    box.setEnabled(False)
-                    box.setText(f"{spec.label}   — {why}")
                 box.toggled.connect(self._selection_changed)
                 self._boxes[spec.key] = box
-                mlay.addWidget(box)
+                if spec.needs_torch:
+                    # the full executable fetches PyTorch on request
+                    from .. import addons
+
+                    row = QHBoxLayout()
+                    row.setContentsMargins(0, 0, 0, 0)
+                    row.addWidget(box)
+                    btn = QPushButton(tr("Download PyTorch..."))
+                    set_tip(btn, tr(
+                        "PyTorch is downloaded once, in the build that suits this "
+                        "computer: with GPU support for a suitable NVIDIA card, "
+                        "otherwise the much smaller CPU build. You are asked "
+                        "before anything is downloaded."))
+                    btn.clicked.connect(self.torch_requested.emit)
+                    btn.setVisible(addons.supported() and spec.bundled()
+                                   and not spec.available())
+                    row.addWidget(btn)
+                    row.addStretch(1)
+                    mlay.addLayout(row)
+                    self._torch_buttons[spec.key] = btn
+                else:
+                    mlay.addWidget(box)
+                self._show_availability(spec)
 
                 panel = MethodPanel(spec)
                 panel.setVisible(False)
@@ -1170,6 +1182,38 @@ class ClusterPage(Page):
         for key, values in (e.overrides or {}).items():
             if key in self._panels:
                 self._panels[key].set_overrides(values)
+        self._selection_changed()
+
+    def _show_availability(self, spec) -> None:
+        """Label a method box with why it cannot be ticked, if it cannot."""
+        import sys
+
+        box = self._boxes[spec.key]
+        if spec.available():
+            box.setText(spec.label)
+            return
+        if getattr(sys, "frozen", False):           # pip means nothing here
+            why = (tr("needs PyTorch") if spec.needs_torch and spec.bundled()
+                   else tr("not included in the Windows executable"))
+        else:
+            why = tr(spec.install_hint) if spec.install_hint else tr("not installed")
+        box.setEnabled(False)
+        box.setText(f"{spec.label}   — {why}")
+
+    def refresh_availability(self) -> None:
+        """Re-read which methods can run, e.g. after PyTorch was downloaded."""
+        from ..analysis import get as get_method
+
+        on = bool(getattr(self, "supervised_ack", None)
+                  and self.supervised_ack.isChecked())
+        for key, box in self._boxes.items():
+            spec = get_method(key)
+            self._show_availability(spec)
+            if spec.available():
+                box.setEnabled(on if spec.supervised else True)
+            btn = self._torch_buttons.get(key)
+            if btn is not None:
+                btn.setVisible(not spec.available() and spec.bundled())
         self._selection_changed()
 
     def _gate_supervised(self, on: bool) -> None:

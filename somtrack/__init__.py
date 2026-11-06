@@ -18,7 +18,7 @@ from .config import (AnalysisConfig, EmbeddingConfig, ExportConfig,
                      FigureConfig, NodeClusterConfig, PreprocessConfig,
                      ReportConfig, SomConfig, StatsConfig, TrackConfig)
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 __all__ = [
     "AnalysisConfig", "TrackConfig", "PreprocessConfig", "SomConfig",
     "EmbeddingConfig", "StatsConfig", "NodeClusterConfig", "FigureConfig",
