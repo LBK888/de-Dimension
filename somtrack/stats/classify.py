@@ -308,7 +308,18 @@ def classify(
     res.cv_name, res.cv_note = plan.name, plan.note
 
     est = make_estimator(model, random_state=random_state)
-    rounds = _oof_rounds(est, X, y, plan)
+    try:
+        rounds = _oof_rounds(est, X, y, plan)
+    except ValueError as exc:
+        # A training fold too small for the model -- e.g. linear discriminant
+        # analysis needs more samples than groups.  That is a limit of the
+        # design, not a reason to abandon the whole analysis.
+        res.notes.append(Text(
+            "Cross-validated classification could not be run: the training folds "
+            "were too small for the {model} ({error}). Collect more samples or "
+            "replicates per group for this test.",
+            model=Text(res.model_label), error=str(exc)))
+        return res
     if not rounds:
         res.notes.append(Text("Cross-validation produced no complete out-of-fold "
                               "pass."))
@@ -443,6 +454,8 @@ def _pairwise_table(X, y, group_values, structure, model, scheme,
                 "n_a": int((y == a).sum()), "n_b": int((y == b).sum()),
                 "balanced_accuracy": score,
             })
+    if not rows:                         # every pair was too small to test
+        return pd.DataFrame()
     return pd.DataFrame(rows).sort_values("balanced_accuracy",
                                           ascending=False).reset_index(drop=True)
 

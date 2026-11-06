@@ -908,6 +908,35 @@ MESSAGES: dict[str, str] = {
     "The design allows only {eff} distinct label arrangements, so no p value below "
     "{p:.3g} is attainable.": "此設計只允許 {eff} 種不同的標籤排列，因此 p 值不可能低於 {p:.3g}。",
     "Too few samples per group for permutation importance.": "每組樣本太少，無法計算置換重要性。",
+    "Cross-validated classification could not be run: the training folds were too "
+    "small for the {model} ({error}). Collect more samples or replicates per group "
+    "for this test.":
+        "無法進行交叉驗證分類：訓練折的樣本數不足以擬合{model}（{error}）。"
+        "此檢定需要每組有更多樣本或重複。",
+    "Permutation importance could not be run: the training folds were too small "
+    "({error}).":
+        "無法計算置換重要性：訓練折的樣本數太少（{error}）。",
+    "{stage} could not be run and was skipped: {error}": "{stage}無法執行，已略過：{error}",
+    "The tests for a group difference": "組別差異檢定",
+    "Cross-validated classification": "交叉驗證分類",
+    "Permutation importance": "置換重要性",
+    "Effect sizes": "效應量",
+    "Averaging within each replicate was requested, but there is no usable "
+    "replicate column, so every sample was analysed as its own unit.":
+        "已要求先在每個重複內取平均，但沒有可用的重複欄位，因此每個樣本都以獨立單位分析。",
+    "Averaging within each replicate was requested, but the replicates contain "
+    "samples from several groups, so averaging would mix the groups together. The "
+    "samples were analysed individually instead, with the permutations and the "
+    "cross-validation folds blocked by replicate. If each file is an independent "
+    "repeat, give each one its own replicate number.":
+        "已要求先在每個重複內取平均，但每個重複都包含多個組別的樣本，取平均會把不同組別"
+        "混在一起。因此改為逐一分析每個樣本，並依重複限制置換與交叉驗證的分折。"
+        "若每個檔案都是獨立的重複實驗，請為每個檔案指定各自的重複編號。",
+    "After averaging within each replicate, the smallest group has only {n} "
+    "unit(s). That is too few to cross-validate, so the classification and "
+    "importance results are missing or unstable; the permutation tests still apply.":
+        "在每個重複內取平均後，最小的組別只剩 {n} 個單位。這太少，無法進行交叉驗證，"
+        "因此分類與重要性結果會缺漏或不穩定；置換檢定仍然有效。",
     "Strong evidence that the groups differ.": "有強力證據顯示組別之間有差異。",
     "Moderate evidence that the groups differ.": "有中等程度的證據顯示組別之間有差異。",
     "Weak or borderline evidence that the groups differ.": "僅有微弱或臨界的證據顯示組別之間有差異。",
@@ -1428,6 +1457,245 @@ MESSAGES: dict[str, str] = {
     "Focus index SD": "對焦指數標準差",
     "Variability of the focus index, i.e. vertical excursion proxy.":
         "對焦指數的變異，即垂直位移的替代指標。",
+
+    # ======================================================================
+    # Hover help: what each setting does, in plain language
+    # ======================================================================
+    # the window
+    "Load coordinate tables from a tracker, or a ready-made table of measurements.":
+        "載入追蹤軟體輸出的座標表格，或已整理好的測量值表格。",
+    "Choose which locomotion metrics to compute for each track, then compute them.":
+        "選擇要為每條軌跡計算哪些運動指標，然後進行計算。",
+    "Choose which metrics go into the analysis and how they are scaled.":
+        "選擇哪些指標要納入分析，以及如何縮放。",
+    "Choose the question, the methods and the statistics, then run the analysis.":
+        "選擇要回答的問題、使用的方法與統計檢定，然後執行分析。",
+    "The conclusion, the figures and the tables of the last run.":
+        "上一次執行的結論、圖表與表格。",
+    "Compare the projections with each other, and scan their settings.":
+        "比較各種投影的結果，並掃描它們的參數設定。",
+    "Write the figures, the tables and the report to a folder.":
+        "將圖表、表格與報告寫入資料夾。",
+    "Ready. Rest the mouse on a setting's name to see what it does.":
+        "就緒。將滑鼠停在設定名稱上，即可看到它的用途說明。",
+    "&View": "檢視(&V)",
+    "Theme": "佈景主題",
+    "Settings loaded from {path}.": "已從 {path} 載入設定。",
+
+    # 1. data source
+    "One file is one recording, such as one movie. Drop files here or use "
+    "'Add files...'.":
+        "一個檔案代表一次錄影，例如一部影片。可將檔案拖曳到這裡，或按「加入檔案...」。",
+    "The treatment or condition the file belongs to. Files with the same group are "
+    "pooled and compared with the other groups.":
+        "此檔案所屬的處理或實驗條件。組別相同的檔案會合併在一起，再與其他組別比較。",
+    "Which repeat of the treatment the file is: 1, 2, 3... Files recorded together "
+    "(same day, dish or session) should share a number; repeats done separately "
+    "should not.":
+        "此檔案是該處理的第幾次重複：1、2、3……。同一次錄製的檔案（同一天、同一培養皿"
+        "或同一場次）應使用相同編號；分開進行的重複則應使用不同編號。",
+    "The column that says which track, i.e. which animal, each row belongs to. Rows "
+    "with the same ID are joined into one track.":
+        "指出每一列屬於哪條軌跡（也就是哪一隻動物）的欄位。ID 相同的列會串成同一條軌跡。",
+    "Horizontal position in each frame. Read as pixels unless the box 'X/Y and T "
+    "columns are already in physical units' is ticked.":
+        "每個影格中的水平位置。除非勾選「X/Y 與 T 欄位已是物理單位」，否則以像素讀取。",
+    "Vertical position in each frame. Read as pixels unless the box 'X/Y and T "
+    "columns are already in physical units' is ticked.":
+        "每個影格中的垂直位置。除非勾選「X/Y 與 T 欄位已是物理單位」，否則以像素讀取。",
+    "The frame number or time of each row. It puts the positions in order and turns "
+    "distances into speeds.":
+        "每一列的影格編號或時間。用來排列位置的先後順序，並把距離換算成速度。",
+    "A column naming the treatment of each row. Leave it at (none) to use the group "
+    "typed in the file list instead.":
+        "標示每一列所屬處理的欄位。保持「（無）」則改用上方檔案清單中填寫的組別。",
+    "A column naming the replicate of each row. Leave it at (none) to use the "
+    "replicate number in the file list instead.":
+        "標示每一列所屬重複的欄位。保持「（無）」則改用上方檔案清單中的重複編號。",
+    "Size of the detected object in each frame. Adds the body-area metrics.":
+        "每個影格中偵測到的物體大小。提供後可計算身體面積相關指標。",
+    "Long axis of the ellipse fitted to the animal. Adds the body length and "
+    "body-shape metrics.":
+        "擬合在動物身上之橢圓的長軸。提供後可計算體長與體型相關指標。",
+    "Short axis of the fitted ellipse. Together with the long axis it adds the "
+    "body-shape metrics.":
+        "擬合橢圓的短軸。與長軸搭配，可計算體型相關指標。",
+    "Angle of the body axis. Adds the metrics that compare where the body points "
+    "with where the animal moves.":
+        "身體軸的角度。提供後可計算「身體朝向」與「實際移動方向」之間差異的指標。",
+    "Average brightness of the object. Adds the intensity metrics.":
+        "物體的平均亮度。提供後可計算強度相關指標。",
+    "Spread of brightness inside the object. Adds the focus index, a rough stand-in "
+    "for depth.":
+        "物體內部亮度的離散程度。提供後可計算對焦指數，作為深度的粗略替代指標。",
+    "Object size estimated by the tracker. Used as the body length when there is no "
+    "ellipse column.":
+        "追蹤軟體估計的物體大小。沒有橢圓欄位時，以此作為體長。",
+    "Use this if you have a position for every frame from a tracker, such as the "
+    "TrackMate spots table. SOMTrack works out the locomotion metrics for you.":
+        "若你有追蹤軟體輸出的逐格位置（例如 TrackMate 的 spots 表格），請選這個。"
+        "SOMTrack 會替你計算運動指標。",
+    "Use this if you already have one row per animal or track, with the measurements "
+    "in columns. The metrics step is skipped.":
+        "若你已有「每隻動物或每條軌跡一列、各測量值各佔一欄」的表格，請選這個。"
+        "將會略過指標計算步驟。",
+    "A preview of the first table, to check that the columns were read correctly.":
+        "第一個表格的預覽，用來確認欄位是否讀取正確。",
+    "How long one pixel is in real units, for example 1.6 um per pixel. Every "
+    "distance and speed is multiplied by it.":
+        "一個像素在實際單位中有多長，例如每像素 1.6 um。所有距離與速度都會乘上此值。",
+    "The unit lengths are reported in. Type your own if it is not in the list.":
+        "報告長度時使用的單位。清單中沒有的話可自行輸入。",
+    "How long one frame lasts, for example 0.05 s when filming at 20 frames per "
+    "second. Every time and speed uses it.":
+        "一個影格持續多久，例如以每秒 20 格拍攝時為 0.05 s。所有時間與速度都會用到此值。",
+    "The unit times are reported in. Type your own if it is not in the list.":
+        "報告時間時使用的單位。清單中沒有的話可自行輸入。",
+    "Tick this if the table already gives positions in um or mm and time in "
+    "seconds. The two scales above are then ignored.":
+        "若表格中的位置已是 um 或 mm、時間已是秒，請勾選此項。上方兩個尺度將不再使用。",
+    "Tracks with fewer detected points than this are left out: a very short track "
+    "gives unreliable metrics.":
+        "偵測點數少於此值的軌跡會被排除：太短的軌跡算出的指標並不可靠。",
+    "The column that names each row, i.e. each animal or track. Optional: rows are "
+    "numbered if it is (none).":
+        "為每一列（每隻動物或每條軌跡）命名的欄位。可不填：設為「（無）」時會自動編號。",
+    "The column with the treatment of each row. The groups are what the statistics "
+    "compare.":
+        "標示每一列所屬處理的欄位。統計檢定比較的就是這些組別。",
+    "The column saying which experiment, day, dish or batch each row came from. "
+    "Optional, but it tells the statistics which samples are not independent of "
+    "each other.":
+        "標示每一列來自哪一次實驗、哪一天、哪個培養皿或批次的欄位。可不填，"
+        "但有了它，統計檢定才知道哪些樣本彼此並不獨立。",
+    "The numeric columns to analyse. Leave out ID numbers, frame counts and anything "
+    "else that is not a measurement.":
+        "要分析的數值欄位。請排除 ID 編號、影格數等任何不是測量值的欄位。",
+
+    # 2. metrics
+    "Works out every ticked metric for every track. Needed before the next step; "
+    "run it again after changing the selection.":
+        "為每條軌跡計算所有勾選的指標。進入下一步前必須先完成；更改選擇後請重新計算。",
+
+    # 3. feature matrix
+    "Ticked metrics go into the map, the projections and the statistics.":
+        "勾選的指標會納入映射圖、投影與統計分析。",
+    "What to do when a metric could not be worked out for a sample. Filling in the "
+    "median keeps every sample; the other two choices drop the sample, or the whole "
+    "metric, instead.":
+        "當某個樣本的某個指標無法計算時該怎麼處理。以中位數填補會保留所有樣本；"
+        "另外兩個選項則會改為移除該樣本，或移除整個指標。",
+    "A metric with the same value for every sample carries no information and is "
+    "removed.":
+        "所有樣本數值都相同的指標不含任何資訊，會被移除。",
+    "Mean, spread and range of every metric before scaling, to spot a metric that "
+    "is mostly missing or has an odd range.":
+        "縮放前每個指標的平均、離散程度與範圍，可用來找出大多缺失或範圍異常的指標。",
+
+    # 4. analysis
+    "Each choice fills in a ready-made set of methods and settings for that "
+    "question. It is only a starting point: everything below can still be changed.":
+        "每個選項都會為該問題填入一組現成的方法與設定。這只是起點：下方所有項目仍可自行修改。",
+    "A projection draws the many metrics of every sample as one point on a flat "
+    "picture. Each method draws it in its own way; tick the ones to run, and rest "
+    "the mouse on a name to read what it does.":
+        "投影會把每個樣本的眾多指標畫成平面圖上的一個點。每種方法的畫法各不相同；"
+        "勾選要執行的方法，並將滑鼠停在名稱上即可閱讀其說明。",
+    "Tick this to allow the supervised projections below. They show how groups you "
+    "have already shown to differ are arranged; they cannot show that the groups "
+    "differ.":
+        "勾選後才能使用下方的監督式投影。它們可用來呈現「已證實不同」的組別如何分布，"
+        "但無法證明組別之間有差異。",
+    "The statistical tests that decide whether the groups really differ, and how "
+    "much. This is what the conclusion is based on.":
+        "判斷組別是否真的不同、差異有多大的統計檢定。結論就是依據這些檢定得出的。",
+    "Settings of the SOM, which lays similar samples next to each other on a grid "
+    "of nodes.":
+        "SOM 的設定。SOM 會把相似的樣本排在節點網格上彼此相鄰的位置。",
+    "Groups neighbouring nodes of the map into a few types of behaviour.":
+        "將映射圖上相鄰的節點歸併為少數幾種行為類型。",
+    "The classifier that tries to tell each sample's group from its metrics on data "
+    "it was not trained on. The regularised linear discriminant is a safe default; "
+    "random forest also catches differences that are not a straight line.":
+        "用來判別樣本組別的分類器：它只根據指標，在未參與訓練的資料上猜出每個樣本的組別。"
+        "正則化線性判別是穩妥的預設；隨機森林還能捕捉非線性的差異。",
+    "Let SOMTrack pick the size of the grid from the number of samples: about 5 x "
+    "the square root of N nodes.":
+        "由 SOMTrack 依樣本數決定網格大小：約為 5 × √N 個節點。",
+    "Nodes across and down. A bigger map shows finer detail but leaves more nodes "
+    "empty.":
+        "橫向與縱向的節點數。映射圖越大，細節越精細，但空節點也越多。",
+    "Shape of the grid. Hexagonal gives every node six neighbours and is the usual "
+    "choice; rectangular gives four.":
+        "網格的形狀。六角形讓每個節點有六個鄰居，是一般的選擇；矩形則為四個。",
+    "Joins opposite edges, so the map has no border and samples do not pile up "
+    "along it. The map is harder to read, because the edges wrap round.":
+        "把相對的邊緣接起來，讓映射圖沒有邊界，樣本就不會堆積在邊緣。"
+        "但由於邊緣會繞回另一側，映射圖較難判讀。",
+    "How many passes over the data the map is trained for. More is slower; 200 is "
+    "plenty for most data sets.":
+        "映射圖訓練時把資料完整走過幾遍。次數越多越慢；大多數資料集 200 次就足夠。",
+    "Online and growing SOM only. How strongly each sample pulls the map towards "
+    "itself: larger learns faster but less smoothly.":
+        "僅用於線上逐筆與成長型 SOM。每個樣本把映射圖拉向自己的力道："
+        "數值越大學得越快，但越不平順。",
+    "How fast the training neighbourhood shrinks, as a fraction of the epochs. "
+    "Smaller values give a more detailed but patchier map.":
+        "訓練時鄰域縮小的速度，以訓練週期的比例表示。數值越小，映射圖越細緻，但也越零碎。",
+    "Growing SOM only. Lower values grow a bigger, more detailed map.":
+        "僅用於成長型 SOM。數值越低，長出的映射圖越大、越細緻。",
+    "Keeps a copy of the map every this many epochs, for the training animation.":
+        "每隔這麼多個訓練週期保存一次映射圖，用於製作訓練過程動畫。",
+    "Fixes the random numbers, so the same settings give the same result every "
+    "time. Try another seed to check a result does not depend on luck.":
+        "固定亂數，讓相同設定每次都得到相同結果。換一個種子試試，"
+        "可確認結果不是靠運氣得來的。",
+    "After training, group neighbouring nodes into a small number of behaviour "
+    "types, each drawn as one outlined region of the map.":
+        "訓練完成後，將相鄰節點歸併為少數幾種行為類型，每一類在映射圖上畫成一個圈起的區域。",
+    "How the nodes are grouped: k-means (the default), Ward hierarchical "
+    "clustering, or a Gaussian mixture model.":
+        "節點的分群方式：k-means（預設）、Ward 階層分群，或高斯混合模型。",
+    "The smallest and largest number of clusters to try. The best number in this "
+    "range is picked automatically.":
+        "要嘗試的最少與最多群集數。會自動從此範圍中選出最佳的群集數。",
+    "Rarely needed. The defaults suit most data.": "很少需要調整。預設值適用於大多數資料。",
+
+    # 6. compare
+    "The method to run over a range of its settings.": "要在一系列參數設定下執行的方法。",
+    "{method} is a supervised projection. Tick the acknowledgement under 'Which "
+    "projections to run' on the Analysis page before using its settings.":
+        "{method} 是監督式投影。請先在「分析」頁面「要執行哪些投影」之下勾選確認選項，"
+        "再使用它的設定。",
+
+    # 7. export
+    "Where every figure, table and report is written. The folder is created if it "
+    "does not exist yet.":
+        "所有圖表、表格與報告的寫入位置。資料夾不存在時會自動建立。",
+    "Picture files, for slides and for a quick look.": "圖片檔，適合用於簡報或快速瀏覽。",
+    "Vector figures whose text stays editable, plus every figure in one "
+    "SOMTrack_report.pdf.":
+        "文字可編輯的向量圖，另附一份收錄所有圖表的 SOMTrack_report.pdf。",
+    "Vector figures for Inkscape or Illustrator.": "供 Inkscape 或 Illustrator 使用的向量圖。",
+    "A video of the map taking shape during training.": "映射圖在訓練過程中逐漸成形的影片。",
+    "Every result table as a CSV file, and all of them together in one Excel "
+    "workbook.":
+        "每個結果表格各存成一個 CSV 檔，並將全部表格合併成一個 Excel 活頁簿。",
+    "Size of the text in the figures. 7-9 pt suits most journals.":
+        "圖中文字的大小。7–9 pt 適用於大多數期刊。",
+    "Font used in the figures. Most journals ask for Arial or Helvetica.":
+        "圖中使用的字型。大多數期刊要求 Arial 或 Helvetica。",
+    "Dots per inch of the PNG files. 300 is enough on screen; 600 is the usual "
+    "requirement for print.":
+        "PNG 檔的每英吋點數。螢幕觀看 300 就足夠；印刷通常要求 600。",
+    "Prints a short explanation under each figure. Untick it for clean figures to "
+    "put in a paper.":
+        "在每張圖下方加上簡短說明。若要放進論文的乾淨圖表，請取消勾選。",
+    "In the one-map-per-group figures, a node holding only a few samples of that "
+    "group is drawn see-through, so it does not look as important as a well-filled "
+    "one.":
+        "在「每組一張映射圖」的圖中，只含少數該組樣本的節點會畫成半透明，"
+        "以免看起來和樣本多的節點一樣重要。",
 }
 
 # Short words that translate differently depending on where they appear.  In
@@ -1494,5 +1762,10 @@ CONTEXTS: dict[str, dict[str, str]] = {
         "v1.2 legacy set": "v1.2 舊版指標組",
         "Kinematics only": "僅運動學",
         "None": "全不選",
+    },
+    "theme": {
+        "Follow the system": "跟隨系統設定",
+        "Light": "淺色",
+        "Dark": "深色",
     },
 }

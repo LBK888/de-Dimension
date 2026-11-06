@@ -231,3 +231,245 @@ def test_compare_page_builds_and_adopts_a_scan(qapp, features, result):
     from matplotlib import pyplot as plt
 
     plt.close("all")
+
+
+# ==========================================================================
+# Settings that disagree between steps
+# ==========================================================================
+def _replicate_frame(features, crossed: bool):
+    from somtrack.io_tables import FeatureDataset
+
+    frame = features.frame.copy()
+    reps = np.tile(np.repeat(np.arange(2), 10), 3)
+    if crossed:      # replicate 0 and 1 in every group: one experiment day each
+        frame["replicate"] = reps
+    else:            # every replicate belongs to exactly one group
+        frame["replicate"] = [f"{g}_{r}" for g, r in zip(frame["group"], reps)]
+    return FeatureDataset(frame=frame, feature_names=features.feature_names,
+                          units=features.units, descriptions={})
+
+
+def _small_config():
+    cfg = AnalysisConfig()
+    cfg.embedding.methods = ["pca"]
+    cfg.embedding.reliability_null = 3
+    cfg.stats.n_permutations = 19
+    cfg.stats.classification_permutations = 19
+    cfg.stats.bootstrap = 50
+    cfg.stats.importance_repeats = 2
+    cfg.som.epochs = 20
+    return cfg
+
+
+@pytest.mark.parametrize("crossed", [True, False])
+def test_averaging_within_replicates_never_aborts_the_run(features, crossed):
+    """'Average within each replicate first' with replicate numbers reused in
+    every group collapsed the data to two rows with one label, and the default
+    LDA classifier then raised: the 'LDA error without LDA' report."""
+    from somtrack import pipeline
+
+    cfg = _small_config()
+    cfg.stats.unit_of_analysis = "replicate"
+    res = pipeline.run_analysis(_replicate_frame(features, crossed), cfg)
+    assert res.verdict is not None and res.separation is not None
+    if crossed:
+        assert any("mix the groups" in w for w in res.warnings)
+
+
+def test_the_result_keeps_the_settings_it_was_computed_with(features):
+    from somtrack import pipeline
+
+    cfg = _small_config()
+    res = pipeline.run_analysis(features, cfg)
+    cfg.som.algorithm = "online"            # the UI goes on editing its config
+    cfg.som.epochs = 999
+    assert res.config.som.algorithm == "batch" and res.config.som.epochs == 20
+
+
+def _silence_message_boxes(monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    shown = []
+    monkeypatch.setattr(QMessageBox, "information",
+                        staticmethod(lambda *a, **k: shown.append(a)))
+    return shown
+
+
+def test_sidebar_jumps_forward_through_every_step(qapp, features, monkeypatch):
+    """A click on a later step used to be silently undone."""
+    from somtrack.ui.main_window import MainWindow
+
+    shown = _silence_message_boxes(monkeypatch)
+    w = MainWindow()
+
+    def load_table():
+        w.state.entry_mode = "features"
+        w.state.features = features
+
+    monkeypatch.setattr(w.source_page, "validate", lambda: None)
+    monkeypatch.setattr(w.source_page, "commit", load_table)
+    target = w.pages.index(w.analysis_page)
+    w.steps.setCurrentRow(target)
+    assert w.stack.currentIndex() == target
+    assert w.steps.currentRow() == target
+    assert not shown
+
+    # ...and stops, saying why, at the first step that is not ready
+    def load_coordinates():
+        w.state.entry_mode = "coordinates"
+        w.state.features = None
+
+    w._go_to(0)
+    monkeypatch.setattr(w.source_page, "commit", load_coordinates)
+    w.steps.setCurrentRow(w.pages.index(w.export_page))
+    assert w.stack.currentIndex() == w.pages.index(w.metrics_page)
+    assert shown, "the user must be told why the jump stopped"
+
+
+def test_feature_choice_survives_a_visit_to_a_later_step(qapp, features):
+    from PySide6.QtCore import Qt
+
+    from somtrack.ui.pages import AppState, PreprocessPage
+
+    state = AppState()
+    state.features = features
+    page = PreprocessPage(state)
+    page.on_enter()
+    page.feats.item(0).setCheckState(Qt.CheckState.Unchecked)
+    page.commit()
+    page.on_enter()                                   # back from the next step
+    assert features.feature_names[0] not in page.feats.selected()
+
+
+def test_a_recipe_with_a_supervised_method_works_every_time(qapp, features):
+    from somtrack.ui.pages import AppState, ClusterPage
+
+    state = AppState()
+    state.features = features
+    page = ClusterPage(state)
+    page.on_enter()
+    for key in ("which_metrics", "standard", "which_metrics"):
+        page.recipe.setCurrentIndex(page.recipe.findData(key))
+    page.commit()
+    assert "svm" in state.config.embedding.methods
+    assert state.config.embedding.allow_supervised
+
+
+def test_supervised_boxes_start_locked(qapp):
+    from somtrack.ui.pages import AppState, ClusterPage
+
+    page = ClusterPage(AppState())
+    assert not page.supervised_ack.isChecked()
+    for key, box in page._boxes.items():
+        if _supervised(key):
+            assert not box.isEnabled()
+
+
+def test_hidden_recipe_settings_reach_the_config(qapp):
+    from somtrack.ui.pages import AppState, ClusterPage
+
+    state = AppState()
+    page = ClusterPage(state)
+    page.recipe.setCurrentIndex(page.recipe.findData("robustness"))
+    page.commit()
+    assert state.config.embedding.stability_seeds == 5
+    assert state.config.report.profile == "full"
+
+
+def test_an_adopted_scan_survives_the_next_run(qapp, features, result):
+    from somtrack.analysis import DataContext
+    from somtrack.analysis.scan import scan
+    from somtrack.ui.main_window import MainWindow
+
+    w = MainWindow()
+    w.state.features = features
+    w.state.result = result
+    w.analysis_page.on_enter()
+    w.analysis_page.commit()
+    sc = scan(DataContext.from_prepared(result.prep, random_state=0), "pacmap",
+              {"n_neighbors": [5, 7]}, criterion="rnx_auc", reliability_null=3,
+              n_jobs=1)
+    w.compare_page.show_scan(sc)
+    w.compare_page._adopt()
+    w.analysis_page.commit()                         # what pressing Run does
+    assert w.state.config.embedding.overrides["pacmap"]["n_neighbors"] in (5, 7)
+
+    from matplotlib import pyplot as plt
+
+    plt.close("all")
+
+
+def test_loaded_settings_appear_in_the_controls(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    from somtrack.ui.main_window import MainWindow
+
+    cfg = AnalysisConfig()
+    cfg.som.algorithm = "online"
+    cfg.som.epochs = 321
+    cfg.preprocess.scaler = "rank"
+    cfg.figure.dpi_png = 300
+    path = cfg.to_json(tmp_path / "s.json")
+    monkeypatch.setattr(QFileDialog, "getOpenFileName",
+                        staticmethod(lambda *a, **k: (str(path), "")))
+    w = MainWindow()
+    w._load_config()
+    assert w.analysis_page.epochs.value() == 321
+    assert w.analysis_page.algo.currentData() == "online"
+    assert w.preprocess_page.scaler.currentData() == "rank"
+    assert w.export_page.dpi.value() == 300
+
+
+# ==========================================================================
+# Dark mode and hover help
+# ==========================================================================
+def test_no_widget_carries_a_colour_of_its_own():
+    """A hard-coded background with the palette's text colour is how dark mode
+    ended up with white text on white fields."""
+    import pathlib
+
+    for name in ("main_window.py", "pages.py", "forms.py", "widgets.py"):
+        src = pathlib.Path("somtrack/ui", name).read_text(encoding="utf-8")
+        assert ".setStyleSheet(" not in src, f"{name} sets its own style sheet"
+
+
+@pytest.mark.parametrize("mode", ["light", "dark"])
+def test_both_themes_build_the_window(qapp, mode):
+    from somtrack.ui import theme
+    from somtrack.ui.main_window import MainWindow
+
+    t = theme.apply(qapp, mode)
+    try:
+        assert t.dark == (mode == "dark")
+        pal = qapp.palette()
+        assert pal.color(pal.ColorRole.Base).name() == t.base
+        assert pal.color(pal.ColorRole.Text).name() == t.text
+        w = MainWindow()
+        for p in w.pages:
+            p.on_enter()
+    finally:
+        theme.apply(qapp, "light")
+
+
+def test_every_setting_explains_itself(qapp):
+    """Each label in a settings form has hover help, and so does each step."""
+    from PySide6.QtWidgets import QFormLayout, QLabel
+
+    from somtrack.analysis import all_methods
+    from somtrack.ui.main_window import MainWindow
+
+    w = MainWindow()
+    # method parameters without a help sentence in the registry are allowed
+    no_help = {p.display for s in all_methods() for p in s.params if not p.help}
+    bare = []
+    for page in (w.source_page, w.preprocess_page, w.analysis_page, w.export_page):
+        for form in page.findChildren(QFormLayout):
+            for row in range(form.rowCount()):
+                item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+                label = item.widget() if item is not None else None
+                if (isinstance(label, QLabel) and label.text().strip()
+                        and not label.toolTip() and label.text() not in no_help):
+                    bare.append(f"{type(page).__name__}: {label.text()}")
+    assert not bare, bare
+    for i in range(w.steps.count()):
+        assert w.steps.item(i).toolTip(), "every step says what it is for"

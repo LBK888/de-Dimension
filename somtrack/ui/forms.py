@@ -26,14 +26,14 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout
 
 from ..analysis.registry import MethodSpec, ParamSpec
 from ..i18n import tr
-from .widgets import hint
+from .widgets import add_row, hint, rich_tip, styled
 
 
 # ==========================================================================
 class Collapsible(QWidget):
     """A section that stays shut until it is wanted."""
 
-    def __init__(self, title: str, parent=None, open_: bool = False):
+    def __init__(self, title: str, parent=None, open_: bool = False, tip: str = ""):
         super().__init__(parent)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 4, 0, 0)
@@ -42,9 +42,9 @@ class Collapsible(QWidget):
         title = tr(title)
         self.toggle = QCheckBox(title)
         self.toggle.setChecked(open_)
-        self.toggle.setStyleSheet(
-            "QCheckBox{color:#4a6fa5;font-weight:600;}"
-            "QCheckBox::indicator{width:0;height:0;}")
+        self.toggle.setProperty("role", "collapsible")
+        if tip:
+            self.toggle.setToolTip(rich_tip(tr(tip)))
         self.toggle.toggled.connect(self._on_toggle)
         lay.addWidget(self.toggle)
 
@@ -76,7 +76,7 @@ class ParamRow(QWidget):
         lay.setSpacing(8)
 
         self.control = _control_for(spec)
-        self.control.setToolTip(tr(spec.help) if spec.help else "")
+        self.control.setToolTip(rich_tip(tr(spec.help)) if spec.help else "")
         self._dirty = False
         _on_change(self.control, self._touched)
         lay.addWidget(self.control)
@@ -84,15 +84,14 @@ class ParamRow(QWidget):
         self.auto = QCheckBox(tr("Auto"))
         self.auto.setChecked(spec.suggest is not None)
         self.auto.setVisible(spec.suggest is not None)
-        self.auto.setToolTip(tr(
+        self.auto.setToolTip(rich_tip(tr(
             "Let SOMTrack choose this from the size of your data set. "
             "The value it picked is shown beside the box and is recorded in the "
-            "methods section."))
+            "methods section.")))
         self.auto.toggled.connect(self._on_auto)
         lay.addWidget(self.auto)
 
-        self.note = QLabel("")
-        self.note.setStyleSheet("color:#6b7280;font-size:11px;")
+        self.note = styled(QLabel(""), "note")
         lay.addWidget(self.note)
         lay.addStretch(1)
 
@@ -229,9 +228,8 @@ class MethodPanel(QWidget):
         if spec.summary:
             lay.addWidget(hint(tr(spec.summary)))
         if spec.caveat:
-            warn = QLabel("⚠  " + tr(spec.caveat))
+            warn = styled(QLabel("⚠  " + tr(spec.caveat)), "warning")
             warn.setWordWrap(True)
-            warn.setStyleSheet("color:#8a3b00;font-size:11px;")
             lay.addWidget(warn)
 
         common = [p for p in spec.params if p.tier == "common"]
@@ -240,7 +238,8 @@ class MethodPanel(QWidget):
         if common:
             lay.addLayout(self._form(common))
         if advanced:
-            box = Collapsible("Advanced settings")
+            box = Collapsible("Advanced settings",
+                              tip="Rarely needed. The defaults suit most data.")
             box.set_layout(self._form(advanced))
             lay.addWidget(box)
 
@@ -252,7 +251,7 @@ class MethodPanel(QWidget):
             row = ParamRow(spec)
             row.changed.connect(self.changed.emit)
             self.rows[spec.name] = row
-            form.addRow(tr(spec.display), row)
+            add_row(form, tr(spec.display), row, tr(spec.help) if spec.help else "")
         return form
 
     # ------------------------------------------------------------------
@@ -281,14 +280,13 @@ class MethodPanel(QWidget):
 def separator() -> QFrame:
     line = QFrame()
     line.setFrameShape(QFrame.Shape.HLine)
-    line.setStyleSheet("color:#e5e7eb;")
+    line.setFrameShadow(QFrame.Shadow.Plain)
+    line.setProperty("role", "rule")
     return line
 
 
 def section_label(text: str) -> QLabel:
-    label = QLabel(text)
-    label.setStyleSheet("font-weight:700;color:#374151;margin-top:6px;")
-    return label
+    return styled(QLabel(text), "section")
 
 
 def build_context(state) -> object | None:

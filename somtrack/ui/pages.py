@@ -21,9 +21,11 @@ from ..i18n import join_clauses, join_list, render, tr
 from ..io_tables import (FeatureDataset, SpotDataset, build_feature_dataset,
                          build_spot_dataset, detect_spot_columns, load_table,
                          numeric_columns)
-from .widgets import (ACCENT, CheckListWidget, ColumnMapWidget, DataFrameView,
-                      FigureGallery, FileListWidget, MetricTree, h_line,
-                      heading, hint, is_none_text, none_text)
+from . import theme
+from .widgets import (CheckListWidget, ColumnMapWidget, DataFrameView,
+                      FigureGallery, FileListWidget, MetricTree, add_row,
+                      h_line, heading, help_label, hint, is_none_text,
+                      none_text, rich_tip, set_tip, styled)
 
 
 # ==========================================================================
@@ -113,6 +115,13 @@ class SourcePage(Page):
         self.rb_coords = QRadioButton(tr("A - Coordinate tables (compute metrics)"))
         self.rb_feats = QRadioButton(tr("B - Multi-dimensional table (skip to "
                                         "clustering)"))
+        set_tip(self.rb_coords, tr(
+            "Use this if you have a position for every frame from a tracker, such "
+            "as the TrackMate spots table. SOMTrack works out the locomotion "
+            "metrics for you."))
+        set_tip(self.rb_feats, tr(
+            "Use this if you already have one row per animal or track, with the "
+            "measurements in columns. The metrics step is skipped."))
         self.rb_coords.setChecked(True)
         grp = QButtonGroup(self)
         grp.addButton(self.rb_coords)
@@ -121,8 +130,8 @@ class SourcePage(Page):
         picker.addWidget(self.rb_feats)
         picker.addStretch(1)
         self.demo_btn = QPushButton(tr("Load demo data"))
-        self.demo_btn.setToolTip(tr("Generate a synthetic four-treatment swimming "
-                                    "assay so you can try the whole workflow."))
+        set_tip(self.demo_btn, tr("Generate a synthetic four-treatment swimming "
+                                  "assay so you can try the whole workflow."))
         picker.addWidget(self.demo_btn)
         self.body.addLayout(picker)
 
@@ -153,7 +162,9 @@ class SourcePage(Page):
         rlay.setContentsMargins(0, 0, 0, 0)
         rlay.addWidget(self._build_calibration())
         self.preview = DataFrameView()
-        rlay.addWidget(QLabel(tr("First rows of the first file")))
+        rlay.addWidget(help_label(tr("First rows of the first file"), tr(
+            "A preview of the first table, to check that the columns were read "
+            "correctly.")))
         rlay.addWidget(self.preview, 1)
         split.addWidget(right)
         split.setSizes([360, 620])
@@ -171,12 +182,17 @@ class SourcePage(Page):
         self.length_unit = QComboBox()
         self.length_unit.addItems(["um", "mm", "cm", "nm", "px"])
         self.length_unit.setEditable(True)
+        scale_tip = tr("How long one pixel is in real units, for example 1.6 um per "
+                       "pixel. Every distance and speed is multiplied by it.")
         row = QHBoxLayout()
         row.addWidget(self.pixel_size)
-        row.addWidget(QLabel(tr("per pixel, unit")))
+        row.addWidget(help_label(tr("per pixel, unit"), scale_tip))
         row.addWidget(self.length_unit)
         holder = QWidget(); holder.setLayout(row)
-        form.addRow(tr("Spatial scale"), holder)
+        set_tip(self.pixel_size, scale_tip)
+        set_tip(self.length_unit, tr("The unit lengths are reported in. Type your "
+                                     "own if it is not in the list."))
+        add_row(form, tr("Spatial scale"), holder, scale_tip)
 
         self.frame_interval = QDoubleSpinBox()
         self.frame_interval.setDecimals(5)
@@ -185,35 +201,44 @@ class SourcePage(Page):
         self.time_unit = QComboBox()
         self.time_unit.addItems(["s", "ms", "min"])
         self.time_unit.setEditable(True)
+        time_tip = tr("How long one frame lasts, for example 0.05 s when filming at "
+                      "20 frames per second. Every time and speed uses it.")
         row2 = QHBoxLayout()
         row2.addWidget(self.frame_interval)
-        row2.addWidget(QLabel(tr("per frame, unit")))
+        row2.addWidget(help_label(tr("per frame, unit"), time_tip))
         row2.addWidget(self.time_unit)
         holder2 = QWidget(); holder2.setLayout(row2)
-        form.addRow(tr("Time scale"), holder2)
+        set_tip(self.frame_interval, time_tip)
+        set_tip(self.time_unit, tr("The unit times are reported in. Type your own "
+                                   "if it is not in the list."))
+        add_row(form, tr("Time scale"), holder2, time_tip)
 
         self.calibrated = QCheckBox(tr("X/Y and T columns are already in physical units"))
+        set_tip(self.calibrated, tr(
+            "Tick this if the table already gives positions in um or mm and time "
+            "in seconds. The two scales above are then ignored."))
         form.addRow("", self.calibrated)
 
         self.min_spots = QSpinBox()
         self.min_spots.setRange(5, 100000)
         self.min_spots.setValue(20)
-        form.addRow(tr("Minimum spots per track"), self.min_spots)
+        add_row(form, tr("Minimum spots per track"), self.min_spots, tr(
+            "Tracks with fewer detected points than this are left out: a very "
+            "short track gives unreliable metrics."))
 
         self.trim = QDoubleSpinBox()
         self.trim.setRange(0.1, 1.0)
         self.trim.setSingleStep(0.05)
         self.trim.setValue(0.6)
-        self.trim.setToolTip(tr(
+        add_row(form, tr("Robust trim fraction"), self.trim, tr(
             "Central fraction of ranked values kept when averaging (the v1.2 decile "
             "filter). 1.0 uses every value. Trimming resists tracking glitches but "
             "biases the reported SD downwards."))
-        form.addRow(tr("Robust trim fraction"), self.trim)
 
         self.auto_halt = QCheckBox(tr("Detect the pause threshold from the speed "
                                       "histogram"))
         self.auto_halt.setChecked(True)
-        self.auto_halt.setToolTip(tr(
+        set_tip(self.auto_halt, tr(
             "v1.2 used a fixed 1.5 pixel step, which does not transfer between "
             "magnifications. This splits the bimodal speed distribution instead."))
         form.addRow("", self.auto_halt)
@@ -222,9 +247,8 @@ class SourcePage(Page):
         self.smoothing.setRange(0, 51)
         self.smoothing.setSingleStep(2)
         self.smoothing.setValue(0)
-        self.smoothing.setToolTip(tr("Savitzky-Golay window in frames; 0 disables "
-                                     "smoothing."))
-        form.addRow(tr("Coordinate smoothing"), self.smoothing)
+        add_row(form, tr("Coordinate smoothing"), self.smoothing,
+                tr("Savitzky-Golay window in frames; 0 disables smoothing."))
         return box
 
     # ------------------------------------------------------------- path B
@@ -250,12 +274,21 @@ class SourcePage(Page):
         self.f_rep = QComboBox()
         for cb in (self.f_id, self.f_group, self.f_rep):
             cb.setMinimumWidth(200)
-        rform.addRow(tr("Sample ID"), self.f_id)
-        rform.addRow(tr("Group (treatment)"), self.f_group)
-        rform.addRow(tr("Replicate"), self.f_rep)
+        add_row(rform, tr("Sample ID"), self.f_id, tr(
+            "The column that names each row, i.e. each animal or track. Optional: "
+            "rows are numbered if it is (none)."))
+        add_row(rform, tr("Group (treatment)"), self.f_group, tr(
+            "The column with the treatment of each row. The groups are what the "
+            "statistics compare."))
+        add_row(rform, tr("Replicate"), self.f_rep, tr(
+            "The column saying which experiment, day, dish or batch each row came "
+            "from. Optional, but it tells the statistics which samples are not "
+            "independent of each other."))
         lay.addWidget(roles)
 
-        lay.addWidget(QLabel(tr("Feature columns to use")))
+        lay.addWidget(help_label(tr("Feature columns to use"), tr(
+            "The numeric columns to analyse. Leave out ID numbers, frame counts and "
+            "anything else that is not a measurement.")))
         btns = QHBoxLayout()
         all_b = QPushButton(tr("Select all"))
         none_b = QPushButton(tr("Select none"))
@@ -370,14 +403,47 @@ class SourcePage(Page):
             return tr("Select at least two feature columns.")
         return None
 
+    def load_config(self, cfg: AnalysisConfig) -> None:
+        t = cfg.track
+        self.pixel_size.setValue(t.pixel_size)
+        self.length_unit.setCurrentText(t.length_unit)
+        self.frame_interval.setValue(t.frame_interval)
+        self.time_unit.setCurrentText(t.time_unit)
+        self.calibrated.setChecked(t.coords_are_calibrated)
+        self.min_spots.setValue(t.min_spots)
+        self.trim.setValue(t.trim_fraction)
+        self.auto_halt.setChecked(t.auto_halt_threshold)
+        self.smoothing.setValue(t.smoothing_window)
+
+    def _inputs(self) -> tuple:
+        """Everything the computed metrics depend on, for spotting a change."""
+        files, groups, reps = self.files.entries()
+        cm = self.colmap.to_map()
+        return (tuple(files), tuple(map(str, groups)), tuple(reps),
+                tuple(sorted(vars(cm).items(), key=lambda kv: kv[0])),
+                self.pixel_size.value(), self.length_unit.currentText(),
+                self.frame_interval.value(), self.time_unit.currentText(),
+                self.calibrated.isChecked(), self.min_spots.value(),
+                self.trim.value(), self.auto_halt.isChecked(),
+                self.smoothing.value())
+
     def commit(self) -> None:
         cfg = self.state.config
         if self.rb_coords.isChecked():
+            # Passing through this step again (Back, or a click in the sidebar)
+            # must not throw away metrics that were already computed from the
+            # very same files and settings.
+            inputs = self._inputs()
+            unchanged = (self.state.entry_mode == "coordinates"
+                         and self.state.spots is not None
+                         and inputs == getattr(self, "_committed", None))
             self.state.entry_mode = "coordinates"
-            files, groups, reps = self.files.entries()
-            cm = self.colmap.to_map()
-            self.state.spots = build_spot_dataset(files, cm, groups, reps)
-            self.state.features = None
+            if not unchanged:
+                files, groups, reps = self.files.entries()
+                cm = self.colmap.to_map()
+                self.state.spots = build_spot_dataset(files, cm, groups, reps)
+                self.state.features = None
+            self._committed = inputs
 
             t = cfg.track
             t.pixel_size = self.pixel_size.value()
@@ -440,11 +506,11 @@ class MetricsPage(Page):
             ("None", lambda: self.tree.set_selection(set()), "Clear the selection."),
         ):
             b = QPushButton(tr(label, context="metric_preset"))
-            b.setToolTip(tr(tip))
+            set_tip(b, tr(tip))
             b.clicked.connect(slot)
             row.addWidget(b)
         row.addStretch(1)
-        self.count_label = QLabel("")
+        self.count_label = styled(QLabel(""), "count")
         row.addWidget(self.count_label)
         self.body.addLayout(row)
 
@@ -453,10 +519,10 @@ class MetricsPage(Page):
         self.body.addWidget(self.tree, 3)
 
         actions = QHBoxLayout()
-        self.compute_btn = QPushButton(tr("Compute metrics"))
-        self.compute_btn.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:white;padding:6px 18px;"
-            "border-radius:4px;font-weight:600;}}")
+        self.compute_btn = styled(QPushButton(tr("Compute metrics")), "primary")
+        set_tip(self.compute_btn, tr(
+            "Works out every ticked metric for every track. Needed before the "
+            "next step; run it again after changing the selection."))
         self.compute_btn.clicked.connect(self.compute_requested.emit)
         actions.addWidget(self.compute_btn)
         actions.addStretch(1)
@@ -474,12 +540,18 @@ class MetricsPage(Page):
     def _update_count(self):
         n = len(self.tree.selected())
         self.count_label.setText(tr("{n} metric(s) selected").format(n=n))
-        self.count_label.setStyleSheet("color:#a33;" if n < 3 else "color:#5d6570;")
+        theme.set_role(self.count_label, "count", state="bad" if n < 3 else "")
 
     def on_enter(self) -> None:
+        # Rebuild the list only when the columns or the units changed, so the
+        # ticks someone set here survive a visit to a later step and back.
         t = self.state.config.track
-        self.tree.populate(self.state.available_metrics, t.length_unit, t.time_unit,
-                           preselect=self.state.config.selected_features or None)
+        key = (tuple(self.state.available_metrics), t.length_unit, t.time_unit)
+        if key != getattr(self, "_populated_for", None):
+            self.tree.populate(self.state.available_metrics, t.length_unit,
+                               t.time_unit,
+                               preselect=self.state.config.selected_features or None)
+            self._populated_for = key
         self._update_count()
 
     def show_features(self, ds: FeatureDataset) -> None:
@@ -515,9 +587,11 @@ class PreprocessPage(Page):
         btns.addWidget(a); btns.addWidget(n); btns.addStretch(1)
         llay.addLayout(btns)
         self.feats = CheckListWidget()
+        set_tip(self.feats, tr("Ticked metrics go into the map, the projections and "
+                               "the statistics."))
         self.feats.changed.connect(self._update_count)
         llay.addWidget(self.feats, 1)
-        self.count = QLabel("")
+        self.count = styled(QLabel(""), "count")
         llay.addWidget(self.count)
         split.addWidget(left)
 
@@ -529,39 +603,45 @@ class PreprocessPage(Page):
         form = QFormLayout(box)
         self.scaler = _option_combo(["zscore", "minmax", "robust", "rank", "none"],
                                     "scaler")
-        self.scaler.setToolTip(tr(
+        add_row(form, tr("Scaling"), self.scaler, tr(
             "z-score puts every metric on equal footing (recommended).\n"
             "min-max reproduces the v1.2 normalisation but is dominated by outliers.\n"
             "robust uses median/IQR; rank is fully non-parametric."))
-        form.addRow(tr("Scaling"), self.scaler)
 
         self.nan_policy = _option_combo(["impute_median", "drop_sample", "drop_feature"],
                                         "nan_policy")
-        form.addRow(tr("Missing values"), self.nan_policy)
+        add_row(form, tr("Missing values"), self.nan_policy, tr(
+            "What to do when a metric could not be worked out for a sample. "
+            "Filling in the median keeps every sample; the other two choices "
+            "drop the sample, or the whole metric, instead."))
 
         self.collinear = QDoubleSpinBox()
         self.collinear.setRange(0.5, 1.0)
         self.collinear.setSingleStep(0.01)
         self.collinear.setValue(0.98)
-        self.collinear.setToolTip(tr("Drop the later of any pair of metrics more "
-                                     "correlated than this. 1.00 disables the pruning."))
-        form.addRow(tr("Prune |r| above"), self.collinear)
+        add_row(form, tr("Prune |r| above"), self.collinear,
+                tr("Drop the later of any pair of metrics more correlated than this. "
+                   "1.00 disables the pruning."))
 
         self.winsor = QDoubleSpinBox()
         self.winsor.setRange(0.0, 0.2)
         self.winsor.setSingleStep(0.01)
         self.winsor.setValue(0.0)
-        self.winsor.setToolTip(tr("Clip each metric to this quantile at both tails; "
-                                  "0 disables clipping."))
-        form.addRow(tr("Winsorise tails"), self.winsor)
+        add_row(form, tr("Winsorise tails"), self.winsor,
+                tr("Clip each metric to this quantile at both tails; 0 disables "
+                   "clipping."))
 
         self.drop_const = QCheckBox(tr("Drop constant metrics"))
         self.drop_const.setChecked(True)
+        set_tip(self.drop_const, tr("A metric with the same value for every sample "
+                                    "carries no information and is removed."))
         form.addRow("", self.drop_const)
         rlay.addWidget(box)
 
         self.summary = DataFrameView()
-        rlay.addWidget(QLabel(tr("Descriptive statistics (original units)")))
+        rlay.addWidget(help_label(tr("Descriptive statistics (original units)"), tr(
+            "Mean, spread and range of every metric before scaling, to spot a "
+            "metric that is mostly missing or has an odd range.")))
         rlay.addWidget(self.summary, 1)
         split.addWidget(right)
         split.setSizes([300, 700])
@@ -570,13 +650,16 @@ class PreprocessPage(Page):
     def _update_count(self):
         n = len(self.feats.selected())
         self.count.setText(tr("{n} feature(s) selected").format(n=n))
-        self.count.setStyleSheet("color:#a33;" if n < 2 else "color:#5d6570;")
+        theme.set_role(self.count, "count", state="bad" if n < 2 else "")
 
     def on_enter(self) -> None:
         ds = self.state.features
         if ds is None:
             return
-        self.feats.populate(ds.feature_names)
+        # Keep the columns that were picked last time instead of re-ticking
+        # everything on every visit, which silently undid the choice.
+        kept = set(self.state.config.selected_features) & set(ds.feature_names)
+        self.feats.populate(ds.feature_names, kept or None)
         rows = []
         for f in ds.feature_names:
             v = pd.to_numeric(ds.frame[f], errors="coerce").to_numpy(float)
@@ -595,6 +678,14 @@ class PreprocessPage(Page):
         if len(self.feats.selected()) < 2:
             return tr("Select at least two features.")
         return None
+
+    def load_config(self, cfg: AnalysisConfig) -> None:
+        p = cfg.preprocess
+        _select(self.scaler, p.scaler)
+        _select(self.nan_policy, p.nan_policy)
+        self.collinear.setValue(p.collinearity_threshold)
+        self.winsor.setValue(p.winsorise_quantile)
+        self.drop_const.setChecked(p.drop_constant)
 
     def commit(self) -> None:
         cfg = self.state.config
@@ -643,9 +734,14 @@ class ClusterPage(Page):
         lay.setSpacing(8)
 
         # ---- level 1: the only decision most users need to make -----------
+        recipe_tip = tr(
+            "Each choice fills in a ready-made set of methods and settings for that "
+            "question. It is only a starting point: everything below can still be "
+            "changed.")
         row = QHBoxLayout()
-        row.addWidget(QLabel(tr("What do you want to find out?")))
+        row.addWidget(help_label(tr("What do you want to find out?"), recipe_tip))
         self.recipe = QComboBox()
+        set_tip(self.recipe, recipe_tip)
         for r in recipes.RECIPES:
             self.recipe.addItem(tr(r.title), r.key)
         self.recipe.setMinimumWidth(300)
@@ -654,15 +750,16 @@ class ClusterPage(Page):
         row.addStretch(1)
         lay.addLayout(row)
 
-        self.recipe_note = QLabel("")
+        self.recipe_note = styled(QLabel(""), "callout")
         self.recipe_note.setWordWrap(True)
-        self.recipe_note.setStyleSheet(
-            "background:#f3f6fa;border-left:3px solid %s;padding:8px 10px;"
-            "color:#374151;" % ACCENT)
         lay.addWidget(self.recipe_note)
 
         # ---- level 2: what will run, as a list you can override -----------
-        methods_box = Collapsible("Which projections to run")
+        methods_box = Collapsible(
+            "Which projections to run",
+            tip="A projection draws the many metrics of every sample as one point "
+                "on a flat picture. Each method draws it in its own way; tick the "
+                "ones to run, and rest the mouse on a name to read what it does.")
         mlay = QVBoxLayout()
         mlay.setContentsMargins(4, 2, 4, 2)
         mlay.setSpacing(2)
@@ -670,23 +767,27 @@ class ClusterPage(Page):
         for family, specs in by_family().items():
             mlay.addWidget(section_label(tr(FAMILY_LABELS.get(family, family))))
             if family == "supervised":
-                warn = QLabel("⚠  " + tr(
+                warn = styled(QLabel(""), "warning")
+                warn.setText("⚠  " + tr(
                     "These use the group labels to build the axes, so they separate "
                     "the groups whatever the data says — they would separate "
                     "random noise too. They are drawn out-of-fold as well, and that "
                     "panel is the one to believe."))
                 warn.setWordWrap(True)
-                warn.setStyleSheet("color:#8a3b00;font-size:11px;padding:0 4px 4px;")
                 mlay.addWidget(warn)
                 self.supervised_ack = QCheckBox(tr(
                     "I understand supervised projections separate groups by "
                     "construction"))
+                set_tip(self.supervised_ack, tr(
+                    "Tick this to allow the supervised projections below. They show "
+                    "how groups you have already shown to differ are arranged; they "
+                    "cannot show that the groups differ."))
                 self.supervised_ack.toggled.connect(self._supervised_toggled)
                 mlay.addWidget(self.supervised_ack)
 
             for spec in specs:
                 box = QCheckBox(spec.label)
-                box.setToolTip(tr(spec.summary))
+                set_tip(box, tr(spec.summary))
                 ok, why = True, ""
                 if not spec.available():
                     ok = False
@@ -708,16 +809,25 @@ class ClusterPage(Page):
         lay.addWidget(methods_box)
 
         # ---- level 2: statistics ------------------------------------------
-        stats_box = Collapsible("How to test whether the groups differ")
+        stats_box = Collapsible(
+            "How to test whether the groups differ",
+            tip="The statistical tests that decide whether the groups really "
+                "differ, and how much. This is what the conclusion is based on.")
         lay.addWidget(stats_box)
         stats_box.set_layout(self._stats_form())
 
         # ---- level 3: the map and the codebook ----------------------------
-        som_box = Collapsible("Self-organising map")
+        som_box = Collapsible(
+            "Self-organising map",
+            tip="Settings of the SOM, which lays similar samples next to each "
+                "other on a grid of nodes.")
         som_box.set_layout(self._som_form())
         lay.addWidget(som_box)
 
-        nodes_box = Collapsible("Behavioural clusters on the map")
+        nodes_box = Collapsible(
+            "Behavioural clusters on the map",
+            tip="Groups neighbouring nodes of the map into a few types of "
+                "behaviour.")
         nodes_box.set_layout(self._nodes_form())
         lay.addWidget(nodes_box)
 
@@ -726,14 +836,11 @@ class ClusterPage(Page):
         self.body.addWidget(scroll, 1)
 
         run_row = QHBoxLayout()
-        self.run_btn = QPushButton(tr("Run analysis"))
-        self.run_btn.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:white;padding:8px 26px;"
-            "border-radius:4px;font-weight:600;}}")
+        self.run_btn = styled(QPushButton(tr("Run analysis")), "primary",
+                              size="large")
         self.run_btn.clicked.connect(self.run_requested.emit)
         run_row.addWidget(self.run_btn)
-        self.plan_label = QLabel("")
-        self.plan_label.setStyleSheet("color:#6b7280;")
+        self.plan_label = styled(QLabel(""), "hint")
         run_row.addWidget(self.plan_label)
         run_row.addStretch(1)
         self.body.addLayout(run_row)
@@ -747,7 +854,7 @@ class ClusterPage(Page):
 
         self.stats_on = QCheckBox(tr("Test whether the groups differ, and by how much"))
         self.stats_on.setChecked(True)
-        self.stats_on.setToolTip(tr(
+        set_tip(self.stats_on, tr(
             "PERMANOVA and PERMDISP on the sample distances, the energy test, "
             "and cross-validated group assignment with a permutation null."))
         form.addRow("", self.stats_on)
@@ -755,21 +862,19 @@ class ClusterPage(Page):
         self.unit = QComboBox()
         self.unit.addItem(tr("each sample is independent"), "sample")
         self.unit.addItem(tr("average within each replicate first"), "replicate")
-        self.unit.setToolTip(tr(
+        add_row(form, tr("Experimental unit"), self.unit, tr(
             "If several samples came from one dish, clutch or imaging session, "
             "they are not independent measurements. SOMTrack detects the "
             "replicate structure and blocks the permutations and the "
             "cross-validation folds by it either way; this setting decides "
             "whether to go further and average within each replicate, which is "
             "the most conservative option."))
-        form.addRow(tr("Experimental unit"), self.unit)
 
         self.distance = _option_combo(["euclidean", "correlation", "cityblock", "cosine"],
                                       "choice")
-        self.distance.setToolTip(tr(
+        add_row(form, tr("Distance between samples"), self.distance, tr(
             "Used by PERMANOVA, PERMDISP and the MDS projection, so the picture "
             "and the test describe the same thing."))
-        form.addRow(tr("Distance between samples"), self.distance)
 
         self.classifier = QComboBox()
         for key, label in (("lda_shrinkage", "linear discriminant (regularised)"),
@@ -778,17 +883,24 @@ class ClusterPage(Page):
                            ("logistic", "logistic regression"),
                            ("random_forest", "random forest")):
             self.classifier.addItem(tr(label), key)
-        form.addRow(tr("Assignment model"), self.classifier)
+        add_row(form, tr("Assignment model"), self.classifier, tr(
+            "The classifier that tries to tell each sample's group from its "
+            "metrics on data it was not trained on. The regularised linear "
+            "discriminant is a safe default; random forest also catches "
+            "differences that are not a straight line."))
 
         self.permutations = QSpinBox()
         self.permutations.setRange(0, 99999)
         self.permutations.setSingleStep(100)
         self.permutations.setValue(999)
-        self.permutations.setToolTip(tr(
+        add_row(form, tr("Label shuffles"), self.permutations, tr(
             "How many times the group labels are shuffled to work out what this "
             "analysis achieves when there is nothing to find. 999 supports a "
             "smallest p value of 0.001; fewer is faster and less precise."))
-        form.addRow(tr("Label shuffles"), self.permutations)
+
+        # keep the "will run: ..." line under the Run button up to date
+        self.stats_on.toggled.connect(self._selection_changed)
+        self.permutations.valueChanged.connect(self._selection_changed)
 
         form.addRow("", hint(tr(
             "Significance is judged by shuffling the labels, not by a binomial "
@@ -803,26 +915,28 @@ class ClusterPage(Page):
         self.algo = _option_combo(["batch", "supervised", "relevance", "online",
                                    "growing"], "som_algorithm")
         _select(self.algo, "batch")
-        self.algo.setToolTip(tr(
+        algo_tip = tr(
             "batch      -- fast, deterministic, the standard choice.\n"
             "supervised -- XY-fused SOM; pulls the map towards separating your "
             "groups, and so cannot be used as evidence that they differ.\n"
             "relevance  -- learns a weight per metric (GRLVQ) so uninformative "
             "metrics stop diluting the distance.\n"
             "online     -- the sequential rule the ImageJ macro used.\n"
-            "growing    -- grows the map where quantisation error is high."))
+            "growing    -- grows the map where quantisation error is high.")
         self.algo.currentIndexChanged.connect(
             lambda *_: self._algo_changed(_value(self.algo, "batch")))
-        form.addRow(tr("Algorithm"), self.algo)
+        add_row(form, tr("Algorithm"), self.algo, algo_tip)
 
-        self.som_warning = QLabel("")
+        self.som_warning = styled(QLabel(""), "warning")
         self.som_warning.setWordWrap(True)
-        self.som_warning.setStyleSheet("color:#8a3b00;font-size:11px;")
         self.som_warning.setVisible(False)
         form.addRow("", self.som_warning)
 
         self.auto_size = QCheckBox(tr("Choose the map size automatically (5*sqrt(N))"))
         self.auto_size.setChecked(True)
+        set_tip(self.auto_size, tr(
+            "Let SOMTrack pick the size of the grid from the number of samples: "
+            "about 5 x the square root of N nodes."))
         self.auto_size.toggled.connect(self._auto_size_toggled)
         form.addRow("", self.auto_size)
 
@@ -832,51 +946,73 @@ class ClusterPage(Page):
         size_row.addWidget(self.map_w); size_row.addWidget(QLabel("x"))
         size_row.addWidget(self.map_h); size_row.addStretch(1)
         holder = QWidget(); holder.setLayout(size_row)
-        form.addRow(tr("Map size"), holder)
+        size_label = add_row(form, tr("Map size"), holder, tr(
+            "Nodes across and down. A bigger map shows finer detail but leaves "
+            "more nodes empty."))
+        self.map_size_row = (size_label, holder)
         self._auto_size_toggled(True)
 
         self.topology = _option_combo(["hex", "rect"], "lattice")
-        form.addRow(tr("Lattice"), self.topology)
+        add_row(form, tr("Lattice"), self.topology, tr(
+            "Shape of the grid. Hexagonal gives every node six neighbours and is "
+            "the usual choice; rectangular gives four."))
 
         self.toroidal = QCheckBox(tr("Toroidal boundary (removes edge effects)"))
+        set_tip(self.toroidal, tr(
+            "Joins opposite edges, so the map has no border and samples do not "
+            "pile up along it. The map is harder to read, because the edges wrap "
+            "round."))
         form.addRow("", self.toroidal)
 
         self.epochs = QSpinBox(); self.epochs.setRange(10, 20000)
         self.epochs.setValue(200)
-        form.addRow(tr("Training epochs"), self.epochs)
+        add_row(form, tr("Training epochs"), self.epochs, tr(
+            "How many passes over the data the map is trained for. More is "
+            "slower; 200 is plenty for most data sets."))
 
         self.init = _option_combo(["pca", "sample", "random"], "som_init")
-        self.init.setToolTip(tr("PCA initialisation is deterministic and converges "
-                                "faster than the random start used in v1.2."))
-        form.addRow(tr("Initialisation"), self.init)
+        add_row(form, tr("Initialisation"), self.init,
+                tr("PCA initialisation is deterministic and converges faster than "
+                   "the random start used in v1.2."))
 
         self.lr = QDoubleSpinBox(); self.lr.setRange(0.01, 1.0)
         self.lr.setSingleStep(0.05); self.lr.setValue(0.5)
-        form.addRow(tr("Learning rate"), self.lr)
+        self.lr_label = add_row(form, tr("Learning rate"), self.lr, tr(
+            "Online and growing SOM only. How strongly each sample pulls the map "
+            "towards itself: larger learns faster but less smoothly."))
 
         self.tau = QDoubleSpinBox(); self.tau.setRange(0.02, 1.0)
         self.tau.setSingleStep(0.05); self.tau.setValue(0.25)
-        form.addRow(tr("Neighbourhood time constant"), self.tau)
+        add_row(form, tr("Neighbourhood time constant"), self.tau, tr(
+            "How fast the training neighbourhood shrinks, as a fraction of the "
+            "epochs. Smaller values give a more detailed but patchier map."))
 
         self.label_weight = QDoubleSpinBox()
         self.label_weight.setRange(0.0, 0.95)
         self.label_weight.setSingleStep(0.05); self.label_weight.setValue(0.35)
-        self.label_weight.setToolTip(tr(
-            "Supervised SOM only. 0 ignores the labels entirely (= batch SOM); "
-            "high values force separation and overstate it. Report whatever you "
-            "used; 0.2-0.4 is a defensible range."))
-        form.addRow(tr("Label weight (supervised)"), self.label_weight)
+        self.label_weight_label = add_row(
+            form, tr("Label weight (supervised)"), self.label_weight, tr(
+                "Supervised SOM only. 0 ignores the labels entirely (= batch SOM); "
+                "high values force separation and overstate it. Report whatever "
+                "you used; 0.2-0.4 is a defensible range."))
 
         self.spread = QDoubleSpinBox()
         self.spread.setRange(0.05, 0.95); self.spread.setSingleStep(0.05)
         self.spread.setValue(0.5)
-        form.addRow(tr("Spread factor (growing)"), self.spread)
+        self.spread_label = add_row(form, tr("Spread factor (growing)"), self.spread,
+                                    tr("Growing SOM only. Lower values grow a "
+                                       "bigger, more detailed map."))
 
         self.record = QSpinBox(); self.record.setRange(1, 200); self.record.setValue(5)
-        form.addRow(tr("Snapshot interval"), self.record)
+        add_row(form, tr("Snapshot interval"), self.record, tr(
+            "Keeps a copy of the map every this many epochs, for the training "
+            "animation."))
 
         self.seed = QSpinBox(); self.seed.setRange(0, 99999); self.seed.setValue(0)
-        form.addRow(tr("Random seed"), self.seed)
+        add_row(form, tr("Random seed"), self.seed, tr(
+            "Fixes the random numbers, so the same settings give the same result "
+            "every time. Try another seed to check a result does not depend on "
+            "luck."))
         self._algo_changed(_value(self.algo, "batch"))
         return form
 
@@ -885,10 +1021,15 @@ class ClusterPage(Page):
         form.setContentsMargins(20, 2, 4, 8)
         self.nc_enabled = QCheckBox(tr("Divide the map into behavioural clusters"))
         self.nc_enabled.setChecked(True)
+        set_tip(self.nc_enabled, tr(
+            "After training, group neighbouring nodes into a small number of "
+            "behaviour types, each drawn as one outlined region of the map."))
         form.addRow("", self.nc_enabled)
 
         self.nc_method = _option_combo(["kmeans", "ward", "gmm"], "node_cluster")
-        form.addRow(tr("Method"), self.nc_method)
+        add_row(form, tr("Method"), self.nc_method, tr(
+            "How the nodes are grouped: k-means (the default), Ward hierarchical "
+            "clustering, or a Gaussian mixture model."))
 
         self.k_min = QSpinBox(); self.k_min.setRange(2, 40); self.k_min.setValue(2)
         self.k_max = QSpinBox(); self.k_max.setRange(2, 40); self.k_max.setValue(8)
@@ -896,11 +1037,13 @@ class ClusterPage(Page):
         row.addWidget(self.k_min); row.addWidget(QLabel(tr("to")))
         row.addWidget(self.k_max); row.addStretch(1)
         holder = QWidget(); holder.setLayout(row)
-        form.addRow(tr("Try cluster counts"), holder)
+        add_row(form, tr("Try cluster counts"), holder, tr(
+            "The smallest and largest number of clusters to try. The best number "
+            "in this range is picked automatically."))
 
         self.weight_hits = QCheckBox(tr("Weight nodes by their sample count"))
         self.weight_hits.setChecked(True)
-        self.weight_hits.setToolTip(tr(
+        set_tip(self.weight_hits, tr(
             "Stops empty codebook vectors, which the SOM only dragged along "
             "behind their neighbours, from defining a cluster."))
         form.addRow("", self.weight_hits)
@@ -911,38 +1054,135 @@ class ClusterPage(Page):
         return form
 
     # ------------------------------------------------------------------
+    # Settings a recipe (or a loaded settings file) may change that have no
+    # control on this page.  They are carried through to the configuration on
+    # every commit; without this, picking "Check that the picture is real" did
+    # not actually switch on its seed-stability check or its full figure set.
+    _CARRIED = (("report", "profile"),
+                ("embedding", "stability_seeds"), ("embedding", "reliability_null"),
+                ("embedding", "compute_rank_quality"),
+                ("embedding", "compute_reliability"),
+                ("stats", "run_permanova"), ("stats", "run_permdisp"),
+                ("stats", "run_energy"), ("stats", "run_classification"),
+                ("stats", "run_importance"), ("stats", "run_effect_sizes"),
+                ("stats", "importance_repeats"), ("stats", "importance_model"),
+                ("stats", "cv_scheme"), ("stats", "use_replicate_blocks"),
+                ("stats", "bootstrap"))
+
+    recipe_selected = Signal(object)        # the recipe's AnalysisConfig
+
     def _recipe_changed(self, *_) -> None:
         from .. import recipes
 
         key = self.recipe.currentData() or recipes.DEFAULT
         r = recipes.get(key)
         self.recipe_note.setText(f"<b>{tr(r.summary)}</b><br>{tr(r.detail)}")
-
         cfg = r.build(AnalysisConfig())
-        wanted = set(cfg.embedding.resolved_methods())
-        for mkey, box in self._boxes.items():
-            if box.isEnabled():
-                box.blockSignals(True)
-                box.setChecked(mkey in wanted)
-                box.blockSignals(False)
+        self.load_config(cfg, select_recipe=False, overrides=False)
+        self.recipe_selected.emit(cfg)
+
+    def load_config(self, cfg: AnalysisConfig, select_recipe: bool = True,
+                    overrides: bool = True) -> None:
+        """Show ``cfg`` in the controls.
+
+        Used for a recipe, for a settings file loaded from the File menu, and
+        for a scan result adopted on the Compare page.  Before this existed the
+        controls were the only source of truth: anything written into the
+        configuration elsewhere was overwritten by the next commit, so "Use
+        these settings for the next run" was undone by pressing Run.
+        """
+        import copy
+
+        e, st, s, n = cfg.embedding, cfg.stats, cfg.som, cfg.node_cluster
+        if select_recipe:
+            i = self.recipe.findData(cfg.report.recipe)
+            if i >= 0 and i != self.recipe.currentIndex():
+                self.recipe.blockSignals(True)
+                self.recipe.setCurrentIndex(i)
+                self.recipe.blockSignals(False)
+                from .. import recipes
+
+                r = recipes.get(cfg.report.recipe)
+                self.recipe_note.setText(f"<b>{tr(r.summary)}</b><br>{tr(r.detail)}")
+
+        # The acknowledgement first: it decides which boxes can be ticked at
+        # all.  Ticking the boxes first, as this used to, left a recipe that
+        # needs a supervised method without it the second time it was picked.
         if hasattr(self, "supervised_ack"):
-            self.supervised_ack.setChecked(cfg.embedding.allow_supervised)
-        self.stats_on.setChecked(cfg.stats.enabled)
-        _select(self.distance, cfg.stats.distance)
-        self.permutations.setValue(cfg.stats.n_permutations)
-        _select(self.classifier, cfg.stats.classifier)
-        _select(self.algo, cfg.som.algorithm)
-        _select(self.init, cfg.som.init)
+            self.supervised_ack.blockSignals(True)
+            self.supervised_ack.setChecked(bool(e.allow_supervised))
+            self.supervised_ack.blockSignals(False)
+            self._gate_supervised(bool(e.allow_supervised))
+        wanted = set(e.resolved_methods())
+        for key, box in self._boxes.items():
+            box.blockSignals(True)
+            box.setChecked(key in wanted and box.isEnabled())
+            box.blockSignals(False)
+        if overrides:
+            for key, values in (e.overrides or {}).items():
+                if key in self._panels:
+                    self._panels[key].set_overrides(values)
+
+        self.stats_on.setChecked(st.enabled)
+        _select(self.unit, st.unit_of_analysis)
+        _select(self.distance, st.distance)
+        _select(self.classifier, st.classifier)
+        self.permutations.setValue(st.n_permutations)
+
+        _select(self.algo, s.algorithm)
+        self.auto_size.setChecked(not (s.width > 0 and s.height > 0))
+        if s.width > 0 and s.height > 0:
+            self.map_w.setValue(s.width)
+            self.map_h.setValue(s.height)
+        _select(self.topology, s.topology)
+        self.toroidal.setChecked(s.toroidal)
+        self.epochs.setValue(s.epochs)
+        _select(self.init, s.init)
+        self.lr.setValue(s.learning_rate)
+        self.tau.setValue(s.time_constant)
+        self.label_weight.setValue(s.label_weight)
+        self.spread.setValue(s.spread_factor)
+        self.record.setValue(s.record_every)
+        self.seed.setValue(int(s.random_state or 0))
+
+        self.nc_enabled.setChecked(n.enabled)
+        _select(self.nc_method, n.method)
+        self.k_min.setValue(n.k_min)
+        self.k_max.setValue(n.k_max)
+        self.weight_hits.setChecked(n.weight_by_hits)
+
+        self._carried = {(sec, name): copy.deepcopy(getattr(getattr(cfg, sec), name))
+                         for sec, name in self._CARRIED}
+        self._algo_changed(_value(self.algo, "batch"))
         self._selection_changed()
 
-    def _supervised_toggled(self, on: bool) -> None:
+    def adopt_projection_settings(self, cfg: AnalysisConfig) -> None:
+        """Tick and pin what the Compare page adopted, leaving the rest alone."""
+        e = cfg.embedding
+        for key in e.resolved_methods():
+            box = self._boxes.get(key)
+            if box is not None and box.isEnabled():
+                box.setChecked(True)
+        for key, values in (e.overrides or {}).items():
+            if key in self._panels:
+                self._panels[key].set_overrides(values)
+        self._selection_changed()
+
+    def _gate_supervised(self, on: bool) -> None:
+        """Supervised boxes can only be ticked once the warning is acknowledged."""
         from ..analysis import get as get_method
 
         for key, box in self._boxes.items():
-            if get_method(key).supervised:
-                box.setEnabled(on and get_method(key).available())
+            spec = get_method(key)
+            if spec.supervised:
+                box.setEnabled(on and spec.available())
                 if not on:
+                    box.blockSignals(True)
                     box.setChecked(False)
+                    box.blockSignals(False)
+
+    def _supervised_toggled(self, on: bool) -> None:
+        self._gate_supervised(on)
         self._selection_changed()
 
     def _selection_changed(self, *_) -> None:
@@ -965,12 +1205,17 @@ class ClusterPage(Page):
 
     def _algo_changed(self, algo: str) -> None:
         # Hide what does not apply rather than greying it: a disabled control is
-        # still something the eye has to read and dismiss.
-        self.lr.setVisible(algo in ("online", "growing"))
-        self.label_weight.setVisible(algo == "supervised")
-        self.spread.setVisible(algo == "growing")
-        for w in (self.auto_size, self.map_w, self.map_h, self.toroidal):
-            w.setVisible(algo != "growing")
+        # still something the eye has to read and dismiss.  The label goes with
+        # its control; hiding only the control left a caption with nothing
+        # beside it.
+        for widgets, on in (((self.lr, self.lr_label), algo in ("online", "growing")),
+                            ((self.label_weight, self.label_weight_label),
+                             algo == "supervised"),
+                            ((self.spread, self.spread_label), algo == "growing"),
+                            ((self.auto_size, self.toroidal) + self.map_size_row,
+                             algo != "growing")):
+            for w in widgets:
+                w.setVisible(on)
         if algo != "growing":
             self._auto_size_toggled(self.auto_size.isChecked())
 
@@ -1001,8 +1246,12 @@ class ClusterPage(Page):
         self._selection_changed()
 
     def commit(self) -> None:
+        import copy
+
         cfg = self.state.config
         cfg.report.recipe = self.recipe.currentData() or "standard"
+        for (sec, name), value in getattr(self, "_carried", {}).items():
+            setattr(getattr(cfg, sec), name, copy.deepcopy(value))
 
         e = cfg.embedding
         e.methods = [k for k, b in self._boxes.items()
@@ -1074,9 +1323,8 @@ class ResultsPage(Page):
 
         self.verdict = QTextBrowser()
         self.verdict.setOpenExternalLinks(True)
-        self.verdict.setStyleSheet(
-            "QTextBrowser{background:#ffffff;border:1px solid #e5e7eb;"
-            "border-radius:4px;padding:10px;}")
+        self.verdict.document().setDocumentMargin(12)
+        self._result = None
         self.tabs.addTab(self._wrap(
             self.verdict,
             tr("What this analysis found, and what it does not say.")),
@@ -1135,7 +1383,13 @@ class ResultsPage(Page):
         return w
 
     # ------------------------------------------------------------------
+    def refresh_theme(self) -> None:
+        """Redraw the conclusion, whose colours depend on light or dark."""
+        if self._result is not None:
+            self.verdict.setHtml(self._verdict_html(self._result))
+
     def show_result(self, result, panels) -> None:
+        self._result = result
         self.gallery.set_panels(panels, getattr(result, "figure_captions", None))
         self.verdict.setHtml(self._verdict_html(result))
         self.tabs.setCurrentIndex(0)
@@ -1170,16 +1424,19 @@ class ResultsPage(Page):
         def esc(text) -> str:
             return _h.escape(render(text))
 
+        t = theme.current()
+        muted = t.muted
         v = getattr(result, "verdict", None)
         if v is None:
-            return ("<p style='color:#6b7280'>"
+            return (f"<p style='color:{muted}'>"
                     + tr("The statistics layer was switched off, so there is no "
                          "conclusion to report. Turn it on under <i>How to test "
                          "whether the groups differ</i> and run again.")
                     + "</p>")
 
-        accent = {"strong": "#0072B2", "moderate": "#009E73", "weak": "#E69F00",
-                  "none": "#7F7F7F"}.get(v.confidence, "#7F7F7F")
+        strong, moderate, weak, none = t.verdict
+        accent = {"strong": strong, "moderate": moderate, "weak": weak,
+                  "none": none}.get(v.confidence, none)
         out = [f"<h2 style='color:{accent};margin:0 0 10px'>"
                f"{esc(v.headline)}</h2>"]
         for para in v.findings:
@@ -1194,14 +1451,14 @@ class ResultsPage(Page):
             out.append(f"<p><b>{_h.escape(tr('Main contributing metrics:'))}</b> "
                        + esc(join_list(v.drivers)) + "</p>")
         if v.design_note:
-            out.append(f"<p style='color:#4b5563'>{esc(v.design_note)}</p>")
+            out.append(f"<p style='color:{muted}'>{esc(v.design_note)}</p>")
         if v.caveats:
             out.append("<h3 style='margin:14px 0 4px;font-size:13px'>"
                        + _h.escape(tr("Limits of this analysis")) + "</h3><ul>")
-            out += [f"<li style='color:#4b5563'>{esc(c)}</li>"
+            out += [f"<li style='color:{muted}'>{esc(c)}</li>"
                     for c in v.caveats]
             out.append("</ul>")
-        out.append("<p style='color:#6b7280;font-size:11px;margin-top:16px'>"
+        out.append(f"<p style='color:{muted};font-size:11px;margin-top:16px'>"
                    + _h.escape(tr(
                        "The full report, including the methods paragraph and the "
                        "reference list for every algorithm this run used, is "
@@ -1235,6 +1492,7 @@ class ComparePage(Page):
                 "algorithm.")
 
     scan_requested = Signal(str, str)        # method key, criterion
+    settings_adopted = Signal(object)        # the updated AnalysisConfig
 
     def build(self) -> None:
         self.tabs = QTabWidget()
@@ -1280,37 +1538,34 @@ class ComparePage(Page):
             "setting does not matter for your data, which is worth reporting.")))
 
         row = QHBoxLayout()
-        row.addWidget(QLabel(tr("Scan")))
+        scan_tip = tr("The method to run over a range of its settings.")
+        row.addWidget(help_label(tr("Scan"), scan_tip))
         self.scan_method = QComboBox()
+        set_tip(self.scan_method, scan_tip)
         self.scan_method.setMinimumWidth(180)
         row.addWidget(self.scan_method)
 
-        row.addWidget(QLabel(tr("scored by")))
+        criterion_tip = tr(
+            "'Unreliably placed points' is the criterion of Xia, Lee & Li "
+            "(2024): it turns 'what perplexity should I use' into a question "
+            "with an answer. Scoring by how well the known groups separate is a "
+            "supervised choice, and the report says so.")
+        row.addWidget(help_label(tr("scored by"), criterion_tip))
         self.scan_criterion = QComboBox()
         for key, (_, _, needs_labels, description) in CRITERIA.items():
             self.scan_criterion.addItem(tr(description), key)
         self.scan_criterion.setMinimumWidth(280)
-        self.scan_criterion.setToolTip(tr(
-            "'Unreliably placed points' is the criterion of Xia, Lee & Li "
-            "(2024): it turns 'what perplexity should I use' into a question "
-            "with an answer. Scoring by how well the known groups separate is a "
-            "supervised choice, and the report says so."))
+        set_tip(self.scan_criterion, criterion_tip)
         row.addWidget(self.scan_criterion)
 
-        self.scan_btn = QPushButton(tr("Run scan"))
-        self.scan_btn.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:white;padding:6px 18px;"
-            "border-radius:4px;font-weight:600;}}")
+        self.scan_btn = styled(QPushButton(tr("Run scan")), "primary")
         self.scan_btn.clicked.connect(self._emit_scan)
         row.addWidget(self.scan_btn)
         row.addStretch(1)
         lay.addLayout(row)
 
-        self.plateau = QLabel("")
+        self.plateau = styled(QLabel(""), "callout")
         self.plateau.setWordWrap(True)
-        self.plateau.setStyleSheet(
-            "background:#f3f6fa;border-left:3px solid %s;padding:8px 10px;"
-            "color:#374151;" % ACCENT)
         self.plateau.setVisible(False)
         lay.addWidget(self.plateau)
 
@@ -1324,7 +1579,7 @@ class ComparePage(Page):
 
         self.adopt_btn = QPushButton(tr("Use these settings for the next run"))
         self.adopt_btn.setEnabled(False)
-        self.adopt_btn.setToolTip(tr(
+        set_tip(self.adopt_btn, tr(
             "Pins the chosen values as explicit overrides. They will appear in "
             "the methods section as a choice you made."))
         self.adopt_btn.clicked.connect(self._adopt)
@@ -1428,11 +1683,19 @@ class ComparePage(Page):
         scan = getattr(self, "_scan", None)
         if scan is None or not scan.best:
             return
+        from ..analysis import get as get_method
+
         params = scan.best_params()
         cfg = self.state.config.embedding
+        if get_method(scan.method).supervised and not cfg.allow_supervised:
+            self.status.emit(tr(
+                "{method} is a supervised projection. Tick the acknowledgement "
+                "under 'Which projections to run' on the Analysis page before "
+                "using its settings.").format(method=scan.method_label), "warn")
+            return
         cfg.overrides.setdefault(scan.method, {}).update(params)
         if scan.method not in cfg.methods:
-            cfg.methods = list(cfg.methods) + [scan.method]
+            cfg.methods = list(cfg.resolved_methods()) + [scan.method]
         bits = ", ".join(f"{k} = {v:g}" if isinstance(v, float) else f"{k} = {v}"
                          for k, v in params.items())
         self.status.emit(
@@ -1440,6 +1703,8 @@ class ComparePage(Page):
                "section will record it as your choice.").format(
                 method=scan.method_label, settings=bits), "ok")
         self.adopt_btn.setEnabled(False)
+        # the Analysis page shows it, so its next commit keeps it
+        self.settings_adopted.emit(self.state.config)
 
 
 # ==========================================================================
@@ -1457,7 +1722,10 @@ class ExportPage(Page):
         self.out_dir = QLineEdit(str(Path.home() / "SOMTrack_output"))
         browse = QPushButton(tr("Browse..."))
         browse.clicked.connect(self._browse)
-        row.addWidget(QLabel(tr("Output folder")))
+        out_tip = tr("Where every figure, table and report is written. The folder "
+                     "is created if it does not exist yet.")
+        row.addWidget(help_label(tr("Output folder"), out_tip))
+        set_tip(self.out_dir, out_tip)
         row.addWidget(self.out_dir, 1)
         row.addWidget(browse)
         self.body.addLayout(row)
@@ -1471,6 +1739,15 @@ class ExportPage(Page):
         self.mp4 = QCheckBox(tr("MP4 training animation")); self.mp4.setChecked(True)
         self.tables = QCheckBox(tr("CSV tables + one .xlsx workbook"))
         self.tables.setChecked(True)
+        for fmt_box, tip in (
+                (self.png, "Picture files, for slides and for a quick look."),
+                (self.pdf, "Vector figures whose text stays editable, plus every "
+                           "figure in one SOMTrack_report.pdf."),
+                (self.svg, "Vector figures for Inkscape or Illustrator."),
+                (self.mp4, "A video of the map taking shape during training."),
+                (self.tables, "Every result table as a CSV file, and all of them "
+                              "together in one Excel workbook.")):
+            set_tip(fmt_box, tr(tip))
         for i, c in enumerate((self.png, self.pdf, self.svg, self.mp4, self.tables)):
             grid.addWidget(c, i // 2, i % 2)
         self.body.addWidget(box)
@@ -1486,7 +1763,7 @@ class ExportPage(Page):
         self.translation = QCheckBox(tr("Add a Traditional Chinese translation after "
                                         "the English report"))
         self.translation.setChecked(True)
-        self.translation.setToolTip(tr(
+        set_tip(self.translation, tr(
             "RESULTS_REPORT.html, RESULTS_REPORT.md and methods.txt are written in "
             "English first; the translation follows as a second, complete version. "
             "Text inside the figures and the contents of the tables stay in "
@@ -1498,31 +1775,42 @@ class ExportPage(Page):
         form = QFormLayout(fig_box)
         self.width_mm = QDoubleSpinBox()
         self.width_mm.setRange(60.0, 400.0); self.width_mm.setValue(180.0)
-        self.width_mm.setToolTip(tr("180 mm is a typical double-column width; 90 mm "
-                                    "single."))
-        form.addRow(tr("Figure width (mm)"), self.width_mm)
+        add_row(form, tr("Figure width (mm)"), self.width_mm,
+                tr("180 mm is a typical double-column width; 90 mm single."))
 
         self.font_size = QDoubleSpinBox()
         self.font_size.setRange(5.0, 20.0); self.font_size.setValue(8.0)
-        form.addRow(tr("Base font size (pt)"), self.font_size)
+        add_row(form, tr("Base font size (pt)"), self.font_size, tr(
+            "Size of the text in the figures. 7-9 pt suits most journals."))
 
         self.font_family = QLineEdit("Arial")
-        form.addRow(tr("Font family"), self.font_family)
+        add_row(form, tr("Font family"), self.font_family, tr(
+            "Font used in the figures. Most journals ask for Arial or Helvetica."))
 
         self.dpi = QSpinBox(); self.dpi.setRange(72, 1200); self.dpi.setValue(600)
-        form.addRow(tr("PNG resolution (dpi)"), self.dpi)
+        add_row(form, tr("PNG resolution (dpi)"), self.dpi, tr(
+            "Dots per inch of the PNG files. 300 is enough on screen; 600 is the "
+            "usual requirement for print."))
 
         self.palette = _option_combo(["somtrack", "tab10", "legacy_hsb"], "palette")
-        self.palette.setToolTip(tr("'somtrack' is the Okabe-Ito colour-blind-safe "
-                                   "set; 'legacy_hsb' reproduces the v1.2 hue wheel."))
-        form.addRow(tr("Group palette"), self.palette)
+        add_row(form, tr("Group palette"), self.palette,
+                tr("'somtrack' is the Okabe-Ito colour-blind-safe set; "
+                   "'legacy_hsb' reproduces the v1.2 hue wheel."))
 
         self.captions = QCheckBox(tr("Draw a figure legend under every panel"))
         self.captions.setChecked(True)
+        set_tip(self.captions, tr(
+            "Prints a short explanation under each figure. Untick it for clean "
+            "figures to put in a paper."))
         form.addRow("", self.captions)
         self.body.addWidget(fig_box)
 
+        alpha_tip = tr(
+            "In the one-map-per-group figures, a node holding only a few samples "
+            "of that group is drawn see-through, so it does not look as important "
+            "as a well-filled one.")
         alpha_box = QGroupBox(tr("Per-group map transparency"))
+        alpha_box.setToolTip(rich_tip(alpha_tip))
         aform = QFormLayout(alpha_box)
         self.a0 = QSpinBox(); self.a0.setRange(0, 100); self.a0.setValue(20)
         self.a1 = QSpinBox(); self.a1.setRange(0, 100); self.a1.setValue(40)
@@ -1530,15 +1818,13 @@ class ExportPage(Page):
         for lab, sp in (("0 samples", self.a0), ("1 sample", self.a1),
                         ("2 samples", self.a2)):
             sp.setSuffix(tr(" % opaque"))
-            aform.addRow(tr(lab), sp)
-        aform.addRow(tr(">= 3 samples"), QLabel(tr("100 % opaque (fixed)")))
+            add_row(aform, tr(lab), sp, alpha_tip)
+        add_row(aform, tr(">= 3 samples"), QLabel(tr("100 % opaque (fixed)")), alpha_tip)
         self.body.addWidget(alpha_box)
 
         row2 = QHBoxLayout()
-        self.export_btn = QPushButton(tr("Export everything"))
-        self.export_btn.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:white;padding:8px 26px;"
-            "border-radius:4px;font-weight:600;}}")
+        self.export_btn = styled(QPushButton(tr("Export everything")), "primary",
+                                 size="large")
         self.export_btn.clicked.connect(self.export_requested.emit)
         self.open_btn = QPushButton(tr("Open output folder"))
         self.open_btn.clicked.connect(self._open_folder)
@@ -1551,6 +1837,29 @@ class ExportPage(Page):
     def on_enter(self) -> None:
         # a loaded configuration may have switched the translation off
         self.translation.setChecked(bool(self.state.config.report.translation))
+
+    def adopt_recipe(self, cfg: AnalysisConfig) -> None:
+        """Take the palette a recipe asks for (the v1.2 recipe uses the old hue
+        wheel), which this page would otherwise overwrite on every run."""
+        _select(self.palette, cfg.figure.palette)
+
+    def load_config(self, cfg: AnalysisConfig) -> None:
+        e, f = cfg.export, cfg.figure
+        self.out_dir.setText(str(e.out_dir))
+        for box, on in ((self.png, e.png), (self.pdf, e.pdf), (self.svg, e.svg),
+                        (self.mp4, e.mp4), (self.tables, e.save_tables)):
+            box.setChecked(bool(on))
+        self.translation.setChecked(bool(cfg.report.translation))
+        self.width_mm.setValue(f.figure_width_mm)
+        self.font_size.setValue(f.base_font_size)
+        self.font_family.setText(f.font_family)
+        self.dpi.setValue(f.dpi_png)
+        _select(self.palette, f.palette)
+        self.captions.setChecked(f.show_caption)
+        alpha = f.group_alpha_by_hits or {}
+        for k, sp in ((0, self.a0), (1, self.a1), (2, self.a2)):
+            if k in alpha:
+                sp.setValue(int(round(alpha[k] * 100)))
 
     def _browse(self):
         d = QFileDialog.getExistingDirectory(self, tr("Output folder"),

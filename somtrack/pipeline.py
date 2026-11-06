@@ -199,7 +199,17 @@ def run_analysis(
     config: AnalysisConfig,
     progress: Progress | None = None,
 ) -> AnalysisResult:
-    """Everything after the feature table exists."""
+    """Everything after the feature table exists.
+
+    The result keeps its own copy of ``config``.  The desktop app goes on
+    editing the configuration it passed in after the run, and the report and
+    the saved ``analysis_config.json`` must describe the settings this result
+    was actually computed with, not whatever the controls show at export time.
+    """
+    import copy
+
+    config = copy.deepcopy(config)
+
     def say(msg: str, frac: float) -> None:
         if progress:
             progress(msg, frac)
@@ -337,7 +347,28 @@ def _run_statistics(result, config, prep, log, say) -> None:
     X, y = prep.X, prep.group_codes
     names = list(prep.feature_names)
 
-    if st.unit_of_analysis == "replicate" and structure.blocked:
+    if st.unit_of_analysis == "replicate" and not structure.blocked:
+        result.warnings.append(Text(
+            "Averaging within each replicate was requested, but there is no usable "
+            "replicate column, so every sample was analysed as its own unit."))
+    elif st.unit_of_analysis == "replicate" and structure.design != "nested":
+        # Averaging is only meaningful when each replicate belongs to one group.
+        # When replicate 1 holds every treatment (an experiment day that ran them
+        # all), the average of replicate 1 mixes the groups into one row with one
+        # label: the demo data collapsed to two rows, both called 'control', and
+        # the classifier then failed.
+        result.warnings.append(Text(
+            "Averaging within each replicate was requested, but the replicates "
+            "contain samples from several groups, so averaging would mix the "
+            "groups together. The samples were analysed individually instead, with "
+            "the permutations and the cross-validation folds blocked by replicate. "
+            "If each file is an independent repeat, give each one its own "
+            "replicate number."))
+        structure_note = Clause(structure.note)
+        log.record("Statistics", "replicate-aware permutation and cross-validation",
+                   structure_note,
+                   citations=("anderson2003", "hurlbert1984", "lazic2018"))
+    elif st.unit_of_analysis == "replicate":
         from .stats.blocks import aggregate_to_units
 
         X, y, _ = aggregate_to_units(X, y, structure)
@@ -347,38 +378,67 @@ def _run_statistics(result, config, prep, log, say) -> None:
                         "so the replicate rather than the individual is the unit of "
                         "analysis"),
                    citations=("hurlbert1984", "lazic2018"))
+        counts = np.bincount(y, minlength=prep.n_groups)
+        if counts.min() < 3:
+            result.warnings.append(Text(
+                "After averaging within each replicate, the smallest group has only "
+                "{n} unit(s). That is too few to cross-validate, so the "
+                "classification and importance results are missing or unstable; "
+                "the permutation tests still apply.", n=int(counts.min())))
     elif structure.blocked:
         log.record("Statistics", "replicate-aware permutation and cross-validation",
                    Clause(structure.note),
                    citations=("anderson2003", "hurlbert1984", "lazic2018"))
 
+    # Each stage is guarded: a test the design cannot support is reported and
+    # skipped, as a projection or a figure is, rather than throwing away the
+    # map, the projections and every other test that did run.
+    def guarded(stage: str, fn):
+        try:
+            return fn()
+        except Exception as exc:
+            result.warnings.append(Text("{stage} could not be run and was "
+                                        "skipped: {error}", stage=Text(stage),
+                                        error=str(exc)))
+            return None
+
     if st.run_permanova or st.run_permdisp or st.run_energy:
         say(Text("Testing whether the groups differ"), 0.68)
-        result.separation = analyse_separation(
-            X, y, list(prep.group_values), structure,
-            metric=st.distance, n_permutations=st.n_permutations,
-            random_state=st.random_state, run_permanova=st.run_permanova,
-            run_permdisp=st.run_permdisp, run_energy=st.run_energy,
-            dispersion_centre=st.dispersion_centre)
-        _log_separation(log, st, result.separation)
+        result.separation = guarded("The tests for a group difference", lambda: (
+            analyse_separation(
+                X, y, list(prep.group_values), structure,
+                metric=st.distance, n_permutations=st.n_permutations,
+                random_state=st.random_state, run_permanova=st.run_permanova,
+                run_permdisp=st.run_permdisp, run_energy=st.run_energy,
+                dispersion_centre=st.dispersion_centre)))
+        if result.separation is not None:
+            _log_separation(log, st, result.separation)
 
     if st.run_classification:
         say(Text("Cross-validating group assignment"), 0.76)
-        result.classification = classify(
-            X, y, list(prep.group_values), structure,
-            model=st.classifier, scheme=st.cv_scheme, n_splits=st.cv_splits,
-            repeats=st.cv_repeats, n_permutations=st.classification_permutations,
-            bootstrap=min(st.bootstrap, 2000), feature_names=names,
-            random_state=st.random_state)
-        _log_classification(log, st, result.classification)
+        result.classification = guarded("Cross-validated classification", lambda: (
+            classify(
+                X, y, list(prep.group_values), structure,
+                model=st.classifier, scheme=st.cv_scheme, n_splits=st.cv_splits,
+                repeats=st.cv_repeats, n_permutations=st.classification_permutations,
+                bootstrap=min(st.bootstrap, 2000), feature_names=names,
+                random_state=st.random_state)))
+        if result.classification is not None and np.isfinite(
+                result.classification.balanced_accuracy):
+            _log_classification(log, st, result.classification)
 
     if st.run_importance:
         say(Text("Measuring which metrics matter"), 0.84)
-        result.importance = permutation_importance(
-            X, y, names, structure, model=st.importance_model,
-            n_repeats=st.importance_repeats,
-            cluster_threshold=st.cluster_threshold, scheme=st.cv_scheme,
-            n_splits=st.cv_splits, random_state=st.random_state)
+        result.importance = guarded("Permutation importance", lambda: (
+            permutation_importance(
+                X, y, names, structure, model=st.importance_model,
+                n_repeats=st.importance_repeats,
+                cluster_threshold=st.cluster_threshold, scheme=st.cv_scheme,
+                n_splits=st.cv_splits, random_state=st.random_state)))
+        for note in getattr(result.importance, "notes", []):
+            if note not in result.warnings:
+                result.warnings.append(note)
+    if result.importance is not None and not result.importance.table.empty:
         log.record("Statistics", "permutation importance",
                    Text("cross-validated permutation importance scored by the "
                         "loss in balanced accuracy, computed per metric and per "
@@ -395,11 +455,12 @@ def _run_statistics(result, config, prep, log, say) -> None:
             if src is not None and name in src.frame.columns:
                 values[name] = src.frame.loc[prep.keep_mask, name].to_numpy(float)
         if values:
-            result.effects = estimate_effects(
+            result.effects = guarded("Effect sizes", lambda: estimate_effects(
                 values, prep.group_codes, list(prep.group_values),
                 reference=st.effect_reference_group,
                 units=(src.units if src else {}),
-                n_boot=st.bootstrap, random_state=st.random_state)
+                n_boot=st.bootstrap, random_state=st.random_state))
+        if result.effects is not None:
             log.record("Statistics", "effect sizes with bootstrap intervals",
                        "Hedges' g and the raw difference in measurement units, each "
                        "with a bias-corrected and accelerated bootstrap 95% interval",

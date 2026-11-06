@@ -17,7 +17,8 @@ from ..config import AnalysisConfig
 from ..i18n import LANGUAGES, language, render, tr
 from .pages import (AppState, ClusterPage, ComparePage, ExportPage,
                     MetricsPage, PreprocessPage, ResultsPage, SourcePage)
-from .widgets import ACCENT, LogPane, heading
+from . import theme
+from .widgets import LogPane, heading, rich_tip, styled
 from .workers import TaskRunner
 
 # English source strings; each is translated when the sidebar is built, so the
@@ -30,6 +31,20 @@ STEP_TITLES = [
     "5  Results",
     "6  Compare",
     "7  Export",
+]
+
+# What each step is for, shown when the mouse rests on it in the sidebar.
+STEP_HELP = [
+    "Load coordinate tables from a tracker, or a ready-made table of "
+    "measurements.",
+    "Choose which locomotion metrics to compute for each track, then compute "
+    "them.",
+    "Choose which metrics go into the analysis and how they are scaled.",
+    "Choose the question, the methods and the statistics, then run the "
+    "analysis.",
+    "The conclusion, the figures and the tables of the last run.",
+    "Compare the projections with each other, and scan their settings.",
+    "Write the figures, the tables and the report to a folder.",
 ]
 
 
@@ -90,28 +105,23 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     def _build_sidebar(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background:#f4f6f8;")
+        w.setObjectName("sidebar")
+        w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 16, 12, 12)
 
-        title = heading("SOMTrack", 17)
-        title.setStyleSheet(f"color:{ACCENT};")
-        lay.addWidget(title)
-        sub = QLabel(f"v{__version__}  ·  " + tr("locomotion SOM"))
-        sub.setStyleSheet("color:#7a828c;")
-        lay.addWidget(sub)
+        lay.addWidget(styled(heading("SOMTrack", 17), "brand"))
+        lay.addWidget(styled(QLabel(f"v{__version__}  ·  " + tr("locomotion SOM")),
+                             "hint"))
         lay.addSpacing(14)
 
         self.steps = QListWidget()
+        self.steps.setObjectName("steps")
         self.steps.setFrameShape(QListWidget.Shape.NoFrame)
-        self.steps.setStyleSheet(
-            "QListWidget{background:transparent;}"
-            "QListWidget::item{padding:9px 8px;border-radius:4px;color:#39414b;}"
-            f"QListWidget::item:selected{{background:{ACCENT};color:white;}}"
-            "QListWidget::item:disabled{color:#b3bac2;}"
-        )
-        for t in STEP_TITLES:
-            self.steps.addItem(QListWidgetItem(tr(t)))
+        for title, tip in zip(STEP_TITLES, STEP_HELP):
+            item = QListWidgetItem(tr(title))
+            item.setToolTip(rich_tip(tr(tip)))
+            self.steps.addItem(item)
         self.steps.currentRowChanged.connect(self._sidebar_clicked)
         self.steps.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.steps.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -128,7 +138,8 @@ class MainWindow(QMainWindow):
 
     def _build_footer(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background:#f4f6f8;border-top:1px solid #dfe3e8;")
+        w.setObjectName("footer")
+        w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         lay = QHBoxLayout(w)
         lay.setContentsMargins(16, 8, 16, 8)
 
@@ -136,18 +147,16 @@ class MainWindow(QMainWindow):
         self.progress.setMaximumWidth(280)
         self.progress.setTextVisible(False)
         self.progress.setVisible(False)
-        self.status_label = QLabel(tr("Ready"))
-        self.status_label.setStyleSheet("color:#5d6570;")
+        self.status_label = styled(
+            QLabel(tr("Ready. Rest the mouse on a setting's name to see what it "
+                      "does.")), "status")
         lay.addWidget(self.progress)
         lay.addWidget(self.status_label, 1)
 
         self.back_btn = QPushButton(tr("Back"))
         self.next_btn = QPushButton(tr("Next"))
         self.next_btn.setDefault(True)
-        self.next_btn.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:white;padding:6px 22px;"
-            "border-radius:4px;font-weight:600;}}"
-            "QPushButton:disabled{background:#b9c3cc;}")
+        styled(self.next_btn, "primary")
         self.back_btn.clicked.connect(lambda: self._go_to(self.stack.currentIndex() - 1))
         self.next_btn.clicked.connect(self._next)
         lay.addWidget(self.back_btn)
@@ -184,6 +193,21 @@ class MainWindow(QMainWindow):
             lang_menu.addAction(a)
             self.language_actions[code] = a
 
+        view = self.menuBar().addMenu(tr("&View"))
+        theme_menu = view.addMenu(tr("Theme"))
+        themes = QActionGroup(self)
+        themes.setExclusive(True)
+        self.theme_actions: dict[str, QAction] = {}
+        current_mode = theme.saved_mode()
+        for mode, label in (("system", "Follow the system"), ("light", "Light"),
+                            ("dark", "Dark")):
+            a = QAction(tr(label, context="theme"), self, checkable=True)
+            a.setChecked(mode == current_mode)
+            a.triggered.connect(lambda _=False, m=mode: self._set_theme(m))
+            themes.addAction(a)
+            theme_menu.addAction(a)
+            self.theme_actions[mode] = a
+
         h = self.menuBar().addMenu(tr("&Help"))
         about = QAction(tr("About SOMTrack"), self)
         about.triggered.connect(self._about)
@@ -191,9 +215,39 @@ class MainWindow(QMainWindow):
 
     def _wire(self) -> None:
         self.compare_page.scan_requested.connect(self._run_scan)
+        self.compare_page.settings_adopted.connect(
+            self.analysis_page.adopt_projection_settings)
+        self.analysis_page.recipe_selected.connect(self.export_page.adopt_recipe)
         self.metrics_page.compute_requested.connect(self._compute_metrics)
         self.analysis_page.run_requested.connect(self._run_analysis)
         self.export_page.export_requested.connect(self._export)
+
+        # Follow the system if it switches between light and dark while open.
+        try:
+            from PySide6.QtGui import QGuiApplication
+
+            QGuiApplication.styleHints().colorSchemeChanged.connect(
+                lambda *_: self._system_theme_changed())
+        except (AttributeError, RuntimeError):            # Qt < 6.5
+            pass
+
+    # ------------------------------------------------------------------
+    def _set_theme(self, mode: str) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        if getattr(self, "_applying_theme", False):
+            return
+        self._applying_theme = True
+        try:
+            theme.save_mode(mode)
+            theme.apply(QApplication.instance(), mode)
+            self.results_page.refresh_theme()
+        finally:
+            self._applying_theme = False
+
+    def _system_theme_changed(self) -> None:
+        if theme.saved_mode() == "system":
+            self._set_theme("system")
 
     # ------------------------------------------------------------------
     def _log(self, message: str, level: str = "info") -> None:
@@ -206,6 +260,7 @@ class MainWindow(QMainWindow):
         self.progress.setRange(0, 100)
         self.next_btn.setEnabled(not on)
         self.back_btn.setEnabled(not on)
+        self.steps.setEnabled(not on)       # no jumping while a task runs
         for p in self.pages:
             for attr in ("compute_btn", "run_btn", "export_btn"):
                 b = getattr(p, attr, None)
@@ -231,14 +286,29 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------
     def _sidebar_clicked(self, row: int) -> None:
-        if row < 0 or row == self.stack.currentIndex():
+        """Jump to any step.
+
+        Going back is immediate.  Going forward passes through every step on
+        the way exactly as pressing Next would -- each is checked and saved --
+        and stops, with the reason, at the first one that is not ready.  The
+        sidebar used to ignore forward clicks without saying why, which looked
+        like the steps simply could not be clicked.
+        """
+        current = self.stack.currentIndex()
+        if row < 0 or row == current:
             return
-        if row > self.stack.currentIndex():
-            self.steps.blockSignals(True)
-            self.steps.setCurrentRow(self.stack.currentIndex())
-            self.steps.blockSignals(False)
+        if row < current:
+            self._go_to(row)
             return
-        self._go_to(row)
+        idx = current
+        while idx < row:
+            if idx != current:
+                self.pages[idx].on_enter()   # fill the page before checking it
+            nxt = self._advance(idx)
+            if nxt is None:                  # not ready: show this step and stop
+                break
+            idx = nxt
+        self._go_to(idx)
 
     def _go_to(self, index: int) -> None:
         index = max(0, min(index, len(self.pages) - 1))
@@ -254,26 +324,30 @@ class MainWindow(QMainWindow):
         self.pages[index].on_enter()
 
     def _next(self) -> None:
-        page = self.pages[self.stack.currentIndex()]
+        nxt = self._advance(self.stack.currentIndex())
+        if nxt is not None:
+            self._go_to(nxt)
+
+    def _advance(self, idx: int) -> int | None:
+        """Check and save step ``idx``; the step that follows it, or ``None``."""
+        page = self.pages[idx]
         problem = page.validate()
         if problem:
             self._log(problem, "warn")
             QMessageBox.information(self, tr("One more thing"), render(problem))
-            return
+            return None
         try:
             page.commit()
         except Exception as exc:
             self._on_error(_exception_text(exc), "")
-            return
+            return None
 
-        idx = self.stack.currentIndex()
         if idx == 0 and self.state.entry_mode == "features":
             self._log(tr("Loaded {n} samples, {m} features.").format(
                 n=len(self.state.features.frame),
                 m=len(self.state.features.feature_names)), "ok")
-            self._go_to(2)
-            return
-        self._go_to(idx + 1)
+            return self.pages.index(self.preprocess_page)
+        return idx + 1
 
     # ------------------------------------------------------------------
     def _compute_metrics(self) -> None:
@@ -424,9 +498,18 @@ class MainWindow(QMainWindow):
         self._busy(True, tr("Exporting to {path}...").format(path=out))
         self._log(tr("Exporting to {path}").format(path=out))
 
+        import copy
+
         from .. import pipeline
 
+        # The result keeps the analysis settings it was computed with; only the
+        # presentation -- where to write, how figures look, which languages the
+        # report is in -- is taken from the Export page now.
         result = self.state.result
+        live = self.state.config
+        result.config.export = copy.deepcopy(live.export)
+        result.config.figure = copy.deepcopy(live.figure)
+        result.config.report.translation = live.report.translation
 
         def job(progress=None):
             return pipeline.export_all(result, panels=None, progress=progress)
@@ -479,10 +562,13 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, tr("Could not load settings"),
                                 _exception_text(exc))
             return
+        # Show the loaded values in every step.  Before, the controls kept their
+        # old values and the next Next/Run wrote those back over the file.
         for p in self.pages:
-            p.state.config = self.state.config
-        self._log(tr("Settings loaded from {path}. Re-visit the steps to apply "
-                     "them.").format(path=path), "ok")
+            loader = getattr(p, "load_config", None)
+            if loader is not None:
+                loader(self.state.config)
+        self._log(tr("Settings loaded from {path}.").format(path=path), "ok")
 
     # ------------------------------------------------------------------
     def _set_language(self, code: str) -> None:

@@ -31,7 +31,12 @@ def main(argv: list[str] | None = None) -> int:
     # The language has to be settled before the first widget is built: every
     # label is translated as it is created.
     apply_language(app, choose_language())
-    app.setStyleSheet(_STYLE)
+
+    # Colours come from one theme, light or dark, so a dark Windows desktop
+    # cannot leave light text on a white field (see theme.py).
+    from . import theme
+
+    theme.apply(app, theme.saved_mode())
 
     from .main_window import MainWindow
 
@@ -102,33 +107,6 @@ def apply_language(app, code: str) -> str:
     font.setFamilies(cjk_families(font.family()))
     app.setFont(font)
     return lang
-
-
-_STYLE = """
-QWidget { font-size: 10pt; }
-QGroupBox {
-    border: 1px solid #dfe3e8; border-radius: 5px;
-    margin-top: 10px; padding-top: 8px; font-weight: 600;
-}
-QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color:#39414b; }
-QPushButton { padding: 5px 12px; border: 1px solid #cbd2d9;
-              border-radius: 4px; background: #ffffff; }
-QPushButton:hover { background: #eef4fa; }
-QPushButton:disabled { color: #a8b0b8; background: #f3f4f6; }
-QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
-    padding: 3px 6px; border: 1px solid #cbd2d9; border-radius: 4px; background: white;
-}
-QTreeWidget, QListWidget, QTableView, QPlainTextEdit {
-    border: 1px solid #dfe3e8; border-radius: 4px; background: white;
-}
-QHeaderView::section {
-    background: #f4f6f8; border: none; border-right: 1px solid #e3e7eb;
-    border-bottom: 1px solid #e3e7eb; padding: 4px 6px; font-weight: 600;
-}
-QTabBar::tab { padding: 6px 14px; }
-QProgressBar { border: 1px solid #cbd2d9; border-radius: 4px; height: 10px; }
-QProgressBar::chunk { background: #0072B2; border-radius: 3px; }
-"""
 
 
 if __name__ == "__main__":

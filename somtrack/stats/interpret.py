@@ -243,6 +243,7 @@ def permutation_importance(
     if k < 2 or counts[counts > 0].min() < 2:
         res.notes.append(Text("Too few samples per group for permutation "
                               "importance."))
+        res.table = pd.DataFrame()       # nothing was ranked
         return res
 
     labels, members = feature_clusters(X, list(feature_names), cluster_threshold)
@@ -257,7 +258,14 @@ def permutation_importance(
     base_scores = []
 
     for tr, te in plan.splitter.split(X, y, plan.groups):
-        fitted = clone(est).fit(X[tr], y[tr])
+        try:
+            fitted = clone(est).fit(X[tr], y[tr])
+        except ValueError as exc:            # a fold too small for the model
+            res.notes.append(Text("Permutation importance could not be run: the "
+                                  "training folds were too small ({error}).",
+                                  error=str(exc)))
+            res.table = pd.DataFrame()
+            return res
         base = _balanced_accuracy(y[te], fitted.predict(X[te]), k)
         base_scores.append(base)
 

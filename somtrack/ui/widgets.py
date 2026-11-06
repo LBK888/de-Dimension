@@ -18,7 +18,9 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox,
                                QWidget)
 
 from ..i18n import language, render, tr
+from .theme import set_role
 
+# Kept for code written against 3.0; colours now come from theme.py.
 ACCENT = "#0072B2"
 
 
@@ -46,7 +48,8 @@ def cjk_families(first: str) -> list[str]:
 def h_line() -> QFrame:
     f = QFrame()
     f.setFrameShape(QFrame.Shape.HLine)
-    f.setStyleSheet("color:#dcdcdc;")
+    f.setFrameShadow(QFrame.Shadow.Plain)
+    f.setProperty("role", "rule")
     return f
 
 
@@ -62,7 +65,70 @@ def heading(text: str, size: int = 15) -> QLabel:
 def hint(text: str) -> QLabel:
     lab = QLabel(text)
     lab.setWordWrap(True)
-    lab.setStyleSheet("color:#5d6570;")
+    lab.setProperty("role", "hint")
+    return lab
+
+
+def styled(widget, role: str, **props):
+    """``widget`` with a styling role from theme.py; returns the widget."""
+    set_role(widget, role, **props)
+    return widget
+
+
+# --------------------------------------------------------------------------
+# Hover help
+# --------------------------------------------------------------------------
+def rich_tip(text: str) -> str:
+    """``text`` as a tooltip that wraps.
+
+    Qt only wraps a tooltip it recognises as rich text; a plain one is drawn on
+    a single line, which for a long explanation means a strip across the whole
+    screen.  ``pre-wrap`` keeps the line breaks and the column alignment some
+    tooltips use, while still letting long lines wrap.
+    """
+    if not text:
+        return ""
+    text = str(text)
+    if text.lstrip().startswith("<"):
+        return text
+    import html
+
+    return ("<p style='white-space:pre-wrap; margin:0'>"
+            + html.escape(text).replace("\n", "<br>") + "</p>")
+
+
+def explain(widget, tip: str):
+    """Hover help on a title: a wrapped tooltip and the "what's this" cursor.
+
+    ``tip`` is already in the interface language.  Returns the widget.
+    """
+    if tip:
+        widget.setToolTip(rich_tip(tip))
+        widget.setCursor(Qt.CursorShape.WhatsThisCursor)
+    return widget
+
+
+def set_tip(widget, tip: str):
+    """A wrapped tooltip on a control (whose cursor is left alone)."""
+    widget.setToolTip(rich_tip(tip))
+    return widget
+
+
+def help_label(text: str, tip: str = "") -> QLabel:
+    """A form label that explains its setting when the mouse rests on it."""
+    return explain(QLabel(text), tip)
+
+
+def add_row(form: QFormLayout, label: str, field, tip: str = "") -> QLabel:
+    """``form.addRow`` with hover help on the label.
+
+    The control gets the same tooltip unless it already has a more specific
+    one of its own.  ``label`` and ``tip`` are already translated.
+    """
+    lab = help_label(label, tip)
+    if tip and isinstance(field, QWidget) and not field.toolTip():
+        field.setToolTip(rich_tip(tip))
+    form.addRow(lab, field)
     return lab
 
 
@@ -90,6 +156,9 @@ class FileListWidget(QWidget):
         self.tree = QTreeWidget()
         self.tree.setColumnCount(3)
         self.tree.setHeaderLabels([tr("File"), tr("Group (treatment)"), tr("Replicate")])
+        header = self.tree.headerItem()
+        for col, tip in enumerate(FILE_COLUMN_HELP):
+            header.setToolTip(col, rich_tip(tr(tip)))
         self.tree.setRootIsDecorated(False)
         self.tree.setAlternatingRowColors(True)
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -161,6 +230,17 @@ class FileListWidget(QWidget):
         return files, groups, reps
 
 
+FILE_COLUMN_HELP = (
+    "One file is one recording, such as one movie. Drop files here or use "
+    "'Add files...'.",
+    "The treatment or condition the file belongs to. Files with the same group "
+    "are pooled and compared with the other groups.",
+    "Which repeat of the treatment the file is: 1, 2, 3... Files recorded "
+    "together (same day, dish or session) should share a number; repeats done "
+    "separately should not.",
+)
+
+
 def _guess_group_replicate(stem: str) -> tuple[str, int]:
     from ..io_tables import guess_group_replicate
 
@@ -187,6 +267,36 @@ class ColumnMapWidget(QGroupBox):
         ("diameter", "Estimated diameter (optional)", False),
     ]
 
+    # English source strings, translated when the widget is built
+    HELP = {
+        "track": "The column that says which track, i.e. which animal, each row "
+                 "belongs to. Rows with the same ID are joined into one track.",
+        "x": "Horizontal position in each frame. Read as pixels unless the box "
+             "'X/Y and T columns are already in physical units' is ticked.",
+        "y": "Vertical position in each frame. Read as pixels unless the box "
+             "'X/Y and T columns are already in physical units' is ticked.",
+        "t": "The frame number or time of each row. It puts the positions in "
+             "order and turns distances into speeds.",
+        "group": "A column naming the treatment of each row. Leave it at (none) "
+                 "to use the group typed in the file list instead.",
+        "replicate": "A column naming the replicate of each row. Leave it at "
+                     "(none) to use the replicate number in the file list instead.",
+        "area": "Size of the detected object in each frame. Adds the body-area "
+                "metrics.",
+        "major": "Long axis of the ellipse fitted to the animal. Adds the body "
+                 "length and body-shape metrics.",
+        "minor": "Short axis of the fitted ellipse. Together with the long axis it "
+                 "adds the body-shape metrics.",
+        "angle": "Angle of the body axis. Adds the metrics that compare where the "
+                 "body points with where the animal moves.",
+        "intensity_mean": "Average brightness of the object. Adds the intensity "
+                          "metrics.",
+        "intensity_std": "Spread of brightness inside the object. Adds the focus "
+                         "index, a rough stand-in for depth.",
+        "diameter": "Object size estimated by the tracker. Used as the body length "
+                    "when there is no ellipse column.",
+    }
+
     changed = Signal()
 
     def __init__(self, parent=None):
@@ -199,10 +309,10 @@ class ColumnMapWidget(QGroupBox):
             cb.setMinimumWidth(230)
             cb.currentTextChanged.connect(lambda *_: self.changed.emit())
             self.combos[key] = cb
-            lab = QLabel(tr(label) + (" *" if required else ""))
+            lab = add_row(form, tr(label) + (" *" if required else ""), cb,
+                          tr(self.HELP[key]))
             if required:
-                lab.setStyleSheet(f"color:{ACCENT};")
-            form.addRow(lab, cb)
+                lab.setProperty("role", "required")
 
     def populate(self, columns: list[str], detected) -> None:
         for key, cb in self.combos.items():
@@ -287,8 +397,8 @@ class MetricTree(QTreeWidget):
                 on = spec.default if preselect is None else (spec.name in preselect)
                 child.setCheckState(0, Qt.CheckState.Checked if on
                                     else Qt.CheckState.Unchecked)
-                child.setToolTip(0, tr(spec.label))
-                child.setToolTip(2, description)
+                child.setToolTip(0, rich_tip(tr(spec.label)))
+                child.setToolTip(2, rich_tip(description))
                 child.setData(0, Qt.ItemDataRole.UserRole, spec.name)
                 parent.addChild(child)
             parent.setExpanded(True)
@@ -435,7 +545,7 @@ class FigureGallery(QWidget):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setWidget(holder_widget)
-        self.scroll.setStyleSheet("QScrollArea{background:#ffffff;border:1px solid #dcdcdc;}")
+        self.scroll.setProperty("role", "canvas")
         lay.addWidget(self.scroll, 1)
 
         self._panels: list = []
@@ -450,7 +560,7 @@ class FigureGallery(QWidget):
             item = QListWidgetItem(name)
             caption = (captions or {}).get(name)
             if caption:
-                item.setToolTip(render(caption))
+                item.setToolTip(rich_tip(render(caption)))
             self.list.addItem(item)
         if self._panels:
             self.list.setCurrentRow(0)
@@ -501,7 +611,7 @@ class LogPane(QPlainTextEdit):
         font.setFamilies(cjk_families("Consolas"))
         font.setPointSize(9)
         self.setFont(font)
-        self.setStyleSheet("background:#fbfbfc;color:#26303a;border:1px solid #dcdcdc;")
+        self.setProperty("role", "log")
 
     def log(self, text: str, level: str = "info") -> None:
         prefix = {"info": "", "warn": "! ", "error": "X ", "ok": "+ "}.get(level, "")
@@ -512,5 +622,6 @@ class LogPane(QPlainTextEdit):
 __all__ = [
     "FileListWidget", "ColumnMapWidget", "MetricTree", "CheckListWidget",
     "DataFrameView", "FigureGallery", "LogPane", "heading", "hint", "h_line",
-    "ACCENT", "none_text", "is_none_text", "cjk_families",
+    "ACCENT", "none_text", "is_none_text", "cjk_families", "styled", "rich_tip",
+    "explain", "set_tip", "help_label", "add_row",
 ]

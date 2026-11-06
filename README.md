@@ -263,7 +263,9 @@ Munafò 2018). SOMTrack detects the structure and adapts:
   *within* each block, which is what preserves the blocking
   (Anderson & ter Braak 2003);
 * `--unit replicate` goes further and averages within each replicate before
-  testing — the most conservative option.
+  testing — the most conservative option. It is only meaningful for a nested
+  design: when every replicate holds several groups, averaging would mix them,
+  so SOMTrack says so and analyses the individuals, blocked by replicate.
 
 The report states which design was found and what was done about it. On
 synthetic data with a pure dish effect and no treatment effect, ignoring this
@@ -584,6 +586,15 @@ apply are hidden rather than greyed out: an inapplicable control is still
 something the eye has to read and dismiss.
 
 Results open on the conclusion, not on a gallery.
+
+**Rest the mouse on a setting's name** — the cursor turns into a question
+mark — for a one- or two-sentence explanation of what it does, in the
+interface language. The steps in the sidebar explain themselves the same way,
+and a click on any of them jumps there: going forward checks and saves each
+step on the way, exactly as **Next** would, and stops with the reason at the
+first one that still needs something.
+
+**View → Theme** follows the system's light or dark mode, or fixes either one.
 
 ---
 

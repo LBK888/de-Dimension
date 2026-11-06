@@ -350,3 +350,31 @@ def test_verdict_flags_supervised_projections():
     v = build_verdict(None, None, None, analyse_blocks(y, None),
                       group_values=labels, supervised_used=True)
     assert any("construction" in c for c in v.caveats)
+
+
+# ==========================================================================
+# Designs too small for a test: reported, never fatal
+# ==========================================================================
+@pytest.mark.parametrize("model", ["lda_shrinkage", "random_forest"])
+def test_two_samples_per_group_is_a_note_not_a_crash(model):
+    """Linear discriminant analysis needs more training samples than groups.
+
+    With two samples per group a two-fold split leaves one per group, which
+    used to raise out of the whole analysis -- shown to the user as an LDA
+    error even when no LDA projection had been ticked.
+    """
+    import pandas as pd
+
+    _, X, y, labels = _base(per_group=2, k=4)
+    cls = classify(X, y, labels, analyse_blocks(y, None), model=model,
+                   n_permutations=19, bootstrap=20, random_state=SEED)
+    assert cls.notes or np.isfinite(cls.balanced_accuracy)
+    assert isinstance(cls.pairwise, pd.DataFrame)
+
+
+def test_importance_on_a_tiny_design_returns_an_empty_ranking():
+    _, X, y, labels = _base(per_group=1, k=3)
+    names = [f"m{i}" for i in range(X.shape[1])]
+    imp = permutation_importance(X, y, names, analyse_blocks(y, None),
+                                 model="lda_shrinkage", n_repeats=2)
+    assert imp.table.empty and imp.notes
