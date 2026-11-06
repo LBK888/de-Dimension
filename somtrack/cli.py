@@ -356,12 +356,15 @@ def cmd_methods(_args) -> int:
     from .analysis import FAMILY_LABELS, by_family
     from .citations import cite
 
+    frozen = getattr(sys, "frozen", False)          # the Windows executable
     for family, specs in by_family().items():
         title = FAMILY_LABELS.get(family, family)
         print(f"\n{title}")
         print("-" * len(title))
         for spec in specs:
-            mark = "" if spec.available() else "   [not installed]"
+            mark = ("" if spec.available() else
+                    "   [not included in the Windows executable]" if frozen
+                    else "   [not installed]")
             print(f"\n  {spec.key:16s} {spec.label}{mark}")
             if spec.summary:
                 print(f"    {spec.summary}")
@@ -369,8 +372,11 @@ def cmd_methods(_args) -> int:
                 print(f"    cite: {cite(*spec.citations)}")
             if spec.caveat:
                 print(f"    note: {spec.caveat}")
-            if not spec.available() and spec.install_hint:
-                print(f"    {spec.install_hint}")
+            if not spec.available():
+                if frozen:      # pip means nothing inside the executable
+                    print("    install SOMTrack with install.bat to use it")
+                elif spec.install_hint:
+                    print(f"    {spec.install_hint}")
             for prm in spec.params:
                 scan = (f"  scan: {', '.join(str(v) for v in prm.scan_default)}"
                         if prm.scan_default else "")
