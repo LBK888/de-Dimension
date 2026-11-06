@@ -10,6 +10,8 @@
 
 ### 安裝
 
+**Windows，免安裝。** 從 [Releases](https://github.com/LBK888/de-Dimension/releases) 頁面下載 `SOMTrack-<版本>-windows-x64.zip`，解壓縮到任何位置，雙擊資料夾中的 **`SOMTrack.exe`** 即可。它自帶 Python 與所有套件，只有三項例外：PHATE、SLISEMAP，以及 SLISEMAP 需要的 PyTorch（含 GPU 支援時達數 GB）。程式會把這些方法標示為「Windows 執行檔未包含此方法」；需要時請改用下方的 `install.bat`。第一次啟動需要建立快取，會稍慢一些。加上參數時，同一個程式就是命令列：`SOMTrack.exe run data.csv --features-table -o results`。執行檔由 [`packaging/build_exe.bat`](packaging/build_exe.bat) 建置。
+
 **Windows，不需要任何 Python 經驗。** 雙擊 **`install.bat`**，再雙擊 **`start.bat`**。安裝程式會檢查是否有 Python 3.10 以上版本、在 `.venv\` 建立獨立環境、把所有套件安裝進去，並回報最後有哪些投影方法可用。所有東西都不會安裝到系統層級，因此不會干擾其他 Python 專案；刪除 `.venv\` 即可完全復原。重複執行安裝程式既安全又快速。
 
 `start.bat` 也可以當作命令列使用——`start.bat methods`、`start.bat run data.csv --features-table -o results`。

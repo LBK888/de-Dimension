@@ -196,6 +196,12 @@ class MethodSpec:
     def usable(self, ctx: DataContext) -> tuple[bool, str]:
         """Can this method run on this data?  Returns (ok, reason-if-not)."""
         if not self.available():
+            import sys
+
+            if getattr(sys, "frozen", False):     # the Windows executable
+                return False, Text(
+                    "{method} is not included in the Windows executable; install "
+                    "SOMTrack with install.bat to use it.", method=self.label)
             return False, (Text(self.install_hint) if self.install_hint else
                            Text("{method} is not installed.", method=self.label))
         if self.needs_groups and not ctx.has_groups:

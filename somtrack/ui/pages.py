@@ -790,9 +790,13 @@ class ClusterPage(Page):
                 set_tip(box, tr(spec.summary))
                 ok, why = True, ""
                 if not spec.available():
+                    import sys
+
                     ok = False
                     why = tr(spec.install_hint) if spec.install_hint else tr(
                         "not installed")
+                    if getattr(sys, "frozen", False):   # pip means nothing here
+                        why = tr("not included in the Windows executable")
                 if not ok:
                     box.setEnabled(False)
                     box.setText(f"{spec.label}   — {why}")

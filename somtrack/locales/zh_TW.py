@@ -277,6 +277,10 @@ MESSAGES: dict[str, str] = {
     "I understand supervised projections separate groups by construction":
         "我了解監督式投影在建構上就會把組別分開",
     "not installed": "未安裝",
+    "not included in the Windows executable": "Windows 執行檔未包含此方法",
+    "{method} is not included in the Windows executable; install SOMTrack with "
+    "install.bat to use it.":
+        "Windows 執行檔未包含 {method}；若要使用，請以 install.bat 安裝 SOMTrack。",
     "How to test whether the groups differ": "如何檢定組別是否有差異",
     "Self-organising map": "自組織映射圖（SOM）",
     "Behavioural clusters on the map": "映射圖上的行為群集",
