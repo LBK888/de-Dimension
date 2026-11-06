@@ -42,6 +42,8 @@ umap = ["umap-learn>=0.5"]         # UMAP, densMAP, supervised UMAP
 pacmap = ["pacmap>=0.7"]
 phate = ["phate>=1.0"]
 colour = ["glasbey>=0.2", "cmcrameri>=1.7"]
+# Prefer `python tools/install_torch.py`, which matches the build to the GPU.
+slisemap = ["slisemap>=1.6", "torch>=2.0"]
 fast = ["numba>=0.58"]
 shapes = ["shapely>=2.0"]          # smoother node-cluster outlines
 all = ["umap-learn>=0.5", "pacmap>=0.7", "phate>=1.0", "glasbey>=0.2",

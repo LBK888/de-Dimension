@@ -598,10 +598,19 @@ def build_figures(result: AnalysisResult,
         if progress:
             progress(Text("Rendering {name}", name=name),
                      min(0.95, 0.05 + 0.04 * len(panels)))
+        from matplotlib import pyplot as plt
+
+        before = set(plt.get_fignums())
         try:
             panels.append((name, fn(*a, **kw)))
             captions[name] = why
         except Exception as exc:
+            # A figure function that fails after creating its canvas leaves the
+            # figure open forever: pyplot keeps a reference, so nothing collects
+            # it.  Every skipped figure used to leak one, which is what the
+            # "more than 20 figures" warning was actually reporting.
+            for num in set(plt.get_fignums()) - before:
+                plt.close(num)
             result.warnings.append(Text("Figure '{name}' skipped: {error}",
                                         name=name, error=str(exc)))
 

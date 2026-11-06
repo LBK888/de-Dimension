@@ -402,7 +402,7 @@ def _bootstrap_ci(y, pred, k, n_boot, random_state) -> tuple[float, float]:
 
 def _permutation_null(X, y, structure, model, plan, k, n_perm,
                       random_state, n_jobs, progress) -> np.ndarray:
-    from joblib import Parallel, delayed
+    from ..parallel import parallel_map
 
     perms = list(permutations(y, structure, n_perm, random_state))
 
@@ -415,9 +415,8 @@ def _permutation_null(X, y, structure, model, plan, k, n_perm,
 
     if progress:
         progress(0, len(perms))
-    out = Parallel(n_jobs=n_jobs, prefer="processes")(delayed(one)(p) for p in perms)
-    if progress:
-        progress(len(perms), len(perms))
+    out = parallel_map(one, perms, n_jobs=n_jobs, desc="the permutation test",
+                       progress=progress)
     out = np.asarray(out, dtype=float)
     return out[np.isfinite(out)]
 

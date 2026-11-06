@@ -110,7 +110,8 @@ def plot_group_maps(
 
     jit = hg.stable_jitter(len(res.bmu))
     pos = hg.sample_positions(res.bmu, res.bmu2, res.bmu_dist, res.bmu2_dist,
-                              centres, jit, cfg.jitter_strength)
+                              centres, jit, cfg.jitter_strength,
+                              scale=hg.fit_scale(res.bmu_dist))
 
     for k in range(n_panels):
         r, c = divmod(k, ncols)
@@ -176,7 +177,8 @@ def plot_single_group_map(
 
     jit = hg.stable_jitter(len(res.bmu))
     pos = hg.sample_positions(res.bmu, res.bmu2, res.bmu_dist, res.bmu2_dist,
-                              centres, jit, cfg.jitter_strength)
+                              centres, jit, cfg.jitter_strength,
+                              scale=hg.fit_scale(res.bmu_dist))
     p.ax.scatter(pos[member, 0], pos[member, 1], s=cfg.point_size,
                  c=colors[group_index], edgecolors="white", linewidths=0.5, zorder=6)
     hg.set_map_limits(p.ax, centres)

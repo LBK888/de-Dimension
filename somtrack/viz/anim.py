@@ -59,6 +59,10 @@ def animate_training(
     hues = palette_hues(n_g, cfg.palette)
     colors = group_colors(n_g, cfg.palette)
     jitter = hg.stable_jitter(prep.n_samples)
+    # One radial scale for the whole animation, taken from the trained map.
+    # Rescaling each frame to itself would hide the very thing the animation is
+    # for: points start near the rim and move inwards as the map learns.
+    fit_scale = hg.fit_scale(res.bmu_dist)
 
     group_totals = np.bincount(prep.group_codes, minlength=n_g).astype(float)
     group_totals[group_totals == 0] = 1.0
@@ -71,8 +75,10 @@ def animate_training(
     caption = (
         f"Self-organisation of the {res.width}x{res.height} map over "
         f"{hist.epochs[-1]} epochs ({res.algorithm} training). Node colour encodes "
-        "group composition; points are samples, drawn towards their runner-up node "
-        "in proportion to how ambiguous the assignment is. The quantisation error "
+        "group composition; points are samples, at a distance from the node "
+        "centre showing how well they match it and a bearing showing which "
+        "neighbour they lean towards, so they move inwards as the map learns. "
+        "The quantisation error "
         "trace at the bottom shows convergence."
     )
     p = make_figure(w, None, cfg, caption=caption, legend_width_mm=legend_mm,
@@ -113,8 +119,9 @@ def animate_training(
 
         hg.draw_hexes(ax, centres, face, edgecolor=cfg.hex_edgecolor, linewidth=0.35)
         if show_points:
-            pos = hg.sample_positions(bmu, bmu2, d1, d2, centres, jitter,
-                                      cfg.jitter_strength)
+            pos = hg.sample_positions(
+                bmu, bmu2, d1, d2, centres, jitter, cfg.jitter_strength,
+                scale=fit_scale)
             for g in range(n_g):
                 m = prep.group_codes == g
                 ax.scatter(pos[m, 0], pos[m, 1], s=cfg.point_size, c=colors[g],

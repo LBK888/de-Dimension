@@ -59,10 +59,17 @@ def test_supervised_methods_must_declare_a_caveat():
         if spec.supervised:
             assert spec.caveat, f"{spec.key} is supervised but carries no caveat"
             assert spec.needs_groups
+            if not spec.supports_out_of_fold:
+                assert spec.no_out_of_fold_reason in spec.full_caveat
 
     with pytest.raises(ValueError, match="must declare a caveat"):
         MethodSpec(key="bad", label="Bad", family="supervised",
                    run=lambda c, p: None, supervised=True)
+
+    with pytest.raises(ValueError, match="unsupervised"):
+        MethodSpec(key="bad2", label="Bad2", family="linear",
+                   run=lambda c, p: None,
+                   no_out_of_fold_reason="not applicable")
 
 
 def test_defaults_exclude_supervised_methods():
@@ -93,8 +100,14 @@ def test_every_available_method_runs(ctx, key):
     assert res.method_key == key
     if spec.supervised:
         assert res.caveat
-        assert res.oof_coords is not None or key == "supervised_umap"
         assert res.cv is not None
+        if spec.supports_out_of_fold:
+            assert res.oof_coords is not None, (
+                f"{key} claims it can be drawn out-of-fold but produced none")
+        else:
+            assert spec.no_out_of_fold_reason in res.caveat, (
+                f"{key} cannot be validated out-of-fold, so the figure must "
+                f"say so")
 
 
 def test_parameters_are_derived_from_the_data_not_the_library_default(ctx):
@@ -303,3 +316,83 @@ def test_recipes_all_build_a_usable_config():
         if any(get(k).supervised for k in cfg.embedding.methods):
             assert cfg.embedding.allow_supervised, \
                 f"recipe '{r.key}' selects a supervised method without enabling them"
+
+
+# ==========================================================================
+# Where samples are drawn inside their hexagon
+# ==========================================================================
+def test_sample_radius_tracks_how_well_the_sample_fits_its_node():
+    """The bug this pins: every point drawn hard against the hexagon rim.
+
+    v1.2 placed a sample at ``d1 / d2`` of the way to the edge.  The winning
+    node is by definition the nearest, and neighbouring codebook vectors are
+    close together relative to their distance from any sample, so that ratio
+    sits just under 1 for almost everything and the radius carried no
+    information at all.
+    """
+    from somtrack.viz.hexgeom import fit_fraction, fit_scale
+
+    # A trained SOM's codebook is *smooth*: neighbouring nodes hold similar
+    # vectors, which is the whole point of the topology.  Random codebook
+    # vectors would be far apart and would not reproduce the bug, so the
+    # codebook here is a smooth sheet, as a real one is.
+    rng = np.random.default_rng(0)
+    d, side, n = 60, 8, 400
+    gu, gv = np.meshgrid(np.linspace(0, 1, side), np.linspace(0, 1, side))
+    basis = rng.normal(size=(2, d))
+    W = (gu.ravel()[:, None] * basis[0] + gv.ravel()[:, None] * basis[1])
+    n_nodes = W.shape[0]
+    X = W[rng.integers(0, n_nodes, n)] + rng.normal(scale=0.35, size=(n, d))
+    D = np.linalg.norm(X[:, None, :] - W[None], axis=2)
+    order = np.argsort(D, axis=1)
+    d1 = D[np.arange(n), order[:, 0]]
+    d2 = D[np.arange(n), order[:, 1]]
+
+    old = np.clip(d1 / d2, 0, 1)
+    assert (old > 0.8).mean() > 0.5, "the old rule really did pin points to the rim"
+
+    frac = fit_fraction(d1, fit_scale(d1))
+    assert 0.0 <= frac.min() and frac.max() <= 1.0
+    assert (frac > 0.9).mean() < 0.15, "points must not pile up on the rim"
+    assert (frac < 0.1).mean() > 0.02, "the centre must be reachable"
+    assert np.corrcoef(frac, d1)[0, 1] > 0.9, \
+        "radius must read as 'how well this sample fits its node'"
+
+
+def test_sample_positions_stay_inside_their_hexagon():
+    from somtrack.viz.hexgeom import (HEX_RADIUS, node_centres, sample_positions,
+                                      stable_jitter)
+
+    rng = np.random.default_rng(1)
+    coords = np.array([(c, r) for r in range(5) for c in range(6)])
+    centres = node_centres(coords)
+    n = 300
+    bmu = rng.integers(0, len(coords), n)
+    bmu2 = (bmu + 1) % len(coords)
+    d1 = rng.uniform(0, 5, n)
+    d2 = d1 + rng.uniform(0, 2, n)
+
+    pos = sample_positions(bmu, bmu2, d1, d2, centres, stable_jitter(n), 0.2)
+    offset = np.linalg.norm(pos - centres[bmu], axis=1)
+    inradius = HEX_RADIUS * np.sqrt(3) / 2
+    assert offset.max() <= inradius + 1e-9, \
+        "a sample must never be drawn outside the node it belongs to"
+
+
+def test_a_perfect_fit_sits_at_the_centre():
+    from somtrack.viz.hexgeom import fit_fraction
+
+    d1 = np.array([0.0, 1.0, 2.0])
+    frac = fit_fraction(d1, (0.0, 2.0))
+    assert frac[0] == pytest.approx(0.0)
+    assert frac[1] == pytest.approx(0.5)
+    assert frac[2] == pytest.approx(1.0)
+
+
+def test_identical_fits_do_not_divide_by_zero():
+    from somtrack.viz.hexgeom import fit_fraction, fit_scale
+
+    same = np.full(10, 3.0)
+    frac = fit_fraction(same, fit_scale(same))
+    assert np.all(np.isfinite(frac))
+    assert np.all((frac >= 0) & (frac <= 1))

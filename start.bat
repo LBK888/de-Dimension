@@ -17,7 +17,6 @@ rem    start.bat run data.csv --features-table -o results
 rem ===================================================================
 
 set "PYCON=.venv\Scripts\python.exe"
-set "PYWIN=.venv\Scripts\pythonw.exe"
 
 if not exist "%PYCON%" (
     echo.
@@ -45,12 +44,19 @@ if not "%~1"=="" (
 rem -------------------------------------------------------------------
 rem  No arguments: open the window.
 rem
-rem  Check that it can actually start *before* handing over to
-rem  pythonw.exe.  pythonw has no console, which is what keeps a black
-rem  box from sitting behind the app, but it also discards every error
-rem  message -- so a failure would look like nothing happening at all.
-rem  Importing first means a broken install reports itself here, with
-rem  the traceback visible.
+rem  This deliberately uses python.exe and NOT pythonw.exe.  pythonw has no
+rem  console, which looks tidier, but worker processes cannot be started
+rem  under it on Windows: the permutation test dies with a
+rem  TerminatedWorkerError minutes into a run, after the expensive part is
+rem  already done.  Pointing the interpreter, multiprocessing and loky at
+rem  python.exe does not fix it, and neither does repairing the stdio
+rem  handles -- the only thing that works is not being pythonw.
+rem
+rem  The console starts minimised and the app hides it when it can, so it
+rem  is at worst a taskbar entry rather than a window over the app.
+rem
+rem  Check it can start first: an error here is visible, and a broken
+rem  install would otherwise look like nothing happening at all.
 rem -------------------------------------------------------------------
 "%PYCON%" -c "import somtrack.ui.app" 2>&1
 if errorlevel 1 (
@@ -67,11 +73,18 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if exist "%PYWIN%" (
-    start "SOMTrack" "%PYWIN%" -m somtrack
-) else (
-    "%PYCON%" -m somtrack
-)
+rem Launch it minimised.  Two things that do NOT work, both tried and
+rem measured, so nobody repeats them:
+rem
+rem   - pythonw.exe: no console at all, but loky worker processes die under
+rem     it, so the permutation test fails minutes into a run.
+rem   - powershell Start-Process -WindowStyle Hidden: hides the console, but
+rem     Windows applies that show-state to the process's *first* ShowWindow
+rem     call, so Qt's main window never appears either.
+rem
+rem So: a minimised console, which the app then hides itself if it finds it
+rem owns it alone.
+start "SOMTrack" /min "%PYCON%" -m somtrack
 
 endlocal
 exit /b 0

@@ -604,7 +604,7 @@ def scan_parameters(
     """
     from itertools import product
 
-    from joblib import Parallel, delayed
+    from .parallel import parallel_map
 
     keys = list(grid)
     combos = list(product(*(grid[k] for k in keys)))
@@ -621,9 +621,8 @@ def scan_parameters(
         row.update({k: v for k, v in zip(keys, values)})
         return row
 
-    rows = Parallel(n_jobs=n_jobs, prefer="processes")(delayed(one)(c) for c in combos)
-    if progress:
-        progress(len(rows), len(rows))
+    rows = parallel_map(one, combos, n_jobs=n_jobs, desc="the SOM scan",
+                        progress=progress)
     return list(rows)
 
 

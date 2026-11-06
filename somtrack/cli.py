@@ -408,6 +408,10 @@ def cmd_metrics(_args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from .parallel import ensure_spawnable
+
+    # Harmless off Windows and under a console interpreter; see parallel.py.
+    ensure_spawnable()
     args = _build_parser().parse_args(argv)
     return {"run": cmd_run, "scan": cmd_scan, "demo": cmd_demo,
             "metrics": cmd_metrics, "methods": cmd_methods}[args.command](args)

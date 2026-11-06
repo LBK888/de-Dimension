@@ -27,7 +27,7 @@ echo.
 rem -------------------------------------------------------------------
 rem  1. Find a Python that is new enough
 rem -------------------------------------------------------------------
-echo  [1/5] Looking for Python %NEED% or newer...
+echo  [1/6] Looking for Python %NEED% or newer...
 
 set "PYCMD="
 
@@ -83,7 +83,7 @@ rem -------------------------------------------------------------------
 rem  2. Create the virtual environment
 rem -------------------------------------------------------------------
 echo.
-echo  [2/5] Preparing the virtual environment in %VENV%\ ...
+echo  [2/6] Preparing the virtual environment in %VENV%\ ...
 
 if exist "%PYEXE%" (
     "%PYEXE%" -c "import sys" >nul 2>&1
@@ -122,7 +122,7 @@ rem -------------------------------------------------------------------
 rem  3. pip itself
 rem -------------------------------------------------------------------
 echo.
-echo  [3/5] Updating the package installer...
+echo  [3/6] Updating the package installer...
 "%PYEXE%" -m pip install --quiet --upgrade pip setuptools wheel
 if errorlevel 1 (
     echo  [!] Could not update pip. Carrying on with the version that is
@@ -133,7 +133,7 @@ rem -------------------------------------------------------------------
 rem  4. Required packages
 rem -------------------------------------------------------------------
 echo.
-echo  [4/5] Installing the required packages. The first run downloads
+echo  [4/6] Installing the required packages. The first run downloads
 echo        about 500 MB and takes a few minutes; later runs take
 echo        seconds.
 echo.
@@ -155,10 +155,10 @@ if errorlevel 1 (
 )
 
 rem -------------------------------------------------------------------
-rem  5. Optional packages
+rem  5. Optional packages (small)
 rem -------------------------------------------------------------------
 echo.
-echo  [5/5] Installing the optional packages ^(extra projections and
+echo  [5/6] Installing the optional packages ^(extra projections and
 echo        colour palettes^). SOMTrack runs without these: any that
 echo        fail are skipped, and the report records the omission.
 echo.
@@ -166,6 +166,35 @@ for %%P in (pacmap umap-learn glasbey cmcrameri) do (
     echo        - %%P
     "%PYEXE%" -m pip install --quiet %%P
     if errorlevel 1 echo          not installed, SOMTrack will skip it
+)
+
+rem -------------------------------------------------------------------
+rem  6. PyTorch, for SLISEMAP
+rem
+rem  Separate from step 5 because it is by far the biggest download here:
+rem  a CUDA build is around 3 GB against 250 MB for the CPU one.  Set
+rem  SOMTRACK_SKIP_TORCH=1 to skip it, or SOMTRACK_TORCH_CPU=1 to take
+rem  the small CPU build even on a machine with a GPU.
+rem
+rem  Which build is right is a real decision -- an RTX 50-series card
+rem  needs CUDA 12.8 or newer, and a mismatched build installs and
+rem  imports cleanly before failing the first time it touches the GPU --
+rem  so it is made in tools\install_torch.py, where it can be tested.
+rem -------------------------------------------------------------------
+echo.
+if "%SOMTRACK_SKIP_TORCH%"=="1" (
+    echo  [6/6] Skipping PyTorch ^(SOMTRACK_SKIP_TORCH=1^). SLISEMAP will
+    echo        not be available; everything else works.
+) else (
+    echo  [6/6] Installing PyTorch and SLISEMAP.
+    if "%SOMTRACK_TORCH_CPU%"=="1" (
+        "%PYEXE%" tools\install_torch.py --cpu-only
+    ) else (
+        "%PYEXE%" tools\install_torch.py
+    )
+    if errorlevel 1 (
+        echo  [!] SLISEMAP is not available. Everything else is unaffected.
+    )
 )
 
 rem -------------------------------------------------------------------

@@ -82,8 +82,9 @@ def plot_composition_map(
         "Hue is the circular mean of the group hues weighted by each group's share of "
         "the node; saturation falls as more groups mix in one node; brightness rises "
         "with the fraction of the data the node captured. "
-        + ("Points are individual samples, placed towards their second-best node in "
-           "proportion to how ambiguous the assignment is. " if show_points else ""),
+        + ("Points are individual samples: distance from the node centre is how "
+           "well the sample matches that node, and the bearing is which "
+           "neighbouring node it leans towards. " if show_points else ""),
         f"n = {prep.n_samples} samples, {n_g} groups"
         + (f", epoch {epoch}." if epoch is not None else "."),
     )
@@ -95,8 +96,10 @@ def plot_composition_map(
 
     if show_points:
         jit = hg.stable_jitter(len(res.bmu))
-        pos = hg.sample_positions(res.bmu, res.bmu2, res.bmu_dist, res.bmu2_dist,
-                                  centres, jit, cfg.jitter_strength)
+        pos = hg.sample_positions(
+            res.bmu, res.bmu2, res.bmu_dist, res.bmu2_dist, centres, jit,
+            cfg.jitter_strength,
+            scale=hg.fit_scale(res.bmu_dist))
         for g in range(n_g):
             m = prep.group_codes == g
             p.ax.scatter(pos[m, 0], pos[m, 1], s=cfg.point_size, c=colors[g],
@@ -376,7 +379,8 @@ def plot_node_clusters(
     gcolors = group_colors(prep.n_groups, cfg.palette)
     jit = hg.stable_jitter(len(res.bmu))
     pos = hg.sample_positions(res.bmu, res.bmu2, res.bmu_dist, res.bmu2_dist,
-                              centres, jit, cfg.jitter_strength)
+                              centres, jit, cfg.jitter_strength,
+                              scale=hg.fit_scale(res.bmu_dist))
     for g in range(prep.n_groups):
         m = prep.group_codes == g
         p.ax.scatter(pos[m, 0], pos[m, 1], s=cfg.point_size * 0.7, c=gcolors[g],

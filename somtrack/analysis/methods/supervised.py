@@ -293,6 +293,9 @@ register(MethodSpec(
     run=_run_supervised_umap, supervised=True, needs_groups=True,
     caveat=SUPERVISED_CAVEAT + " This method in particular is known to separate "
                                "training data that it cannot separate on held-out data.",
+    no_out_of_fold_reason=(
+        "This build does not draw the out-of-fold panel for supervised UMAP, so "
+        "the cross-validated score below is the only validation shown."),
     citations=("mcinnes2018",),
     available=has_module("umap"),
     install_hint="Supervised UMAP needs:  pip install umap-learn",
@@ -376,6 +379,11 @@ register(MethodSpec(
             "'similar measurements', and the groups will look organised whatever "
             "the data says."),
     citations=("bjorklund2023",),
+    no_out_of_fold_reason=(
+        "There is no out-of-fold version of this panel: SLISEMAP places a point "
+        "by finding the local model that explains it, which requires that "
+        "point's own label, so a held-out point could only be placed by handing "
+        "the method the answer. Treat every SLISEMAP figure as in-sample."),
     available=has_module("slisemap"),
     install_hint="SLISEMAP needs:  pip install slisemap   (it pulls in PyTorch)",
     summary="Places samples by which metrics explain them, so you can see "

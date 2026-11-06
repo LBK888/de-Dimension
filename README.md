@@ -29,6 +29,17 @@ projections ended up available. Nothing is installed system-wide, so it cannot
 disturb another Python project, and deleting `.venv\` undoes all of it. Running
 it again is safe and fast.
 
+Its last step installs PyTorch, which SLISEMAP needs and which is much the
+largest download here. The build is chosen by
+[`tools/install_torch.py`](tools/install_torch.py) from the GPU and driver
+actually present, because a mismatched CUDA build installs and imports cleanly
+and then fails the first time it touches the GPU — an RTX 50-series card is
+Blackwell and needs CUDA 12.8 or newer, and a build newer than the driver
+supports fails the same way. The result is verified by allocating on the GPU
+before it is called a success, and falls back to the CPU build if anything does
+not line up. Set `SOMTRACK_SKIP_TORCH=1` to skip it entirely, or
+`SOMTRACK_TORCH_CPU=1` to take the small CPU build on a machine that has a GPU.
+
 `start.bat` also works as a command line — `start.bat methods`,
 `start.bat run data.csv --features-table -o results`.
 
@@ -134,6 +145,7 @@ the comparison figures and the reference list all pick it up from there.
 | **PLS-DA** | The discriminant projection of the omics literature. | Barker & Rayens 2003 |
 | **Linear SVM** | The widest gap between groups, with interpretable weights. | Cortes & Vapnik 1995 |
 | **Supervised UMAP** | For illustrating a structure you have already demonstrated. | McInnes et al. 2018 |
+| **SLISEMAP** | Places samples by *which metrics explain them*, so a treatment that acts differently on different individuals is visible. Needs PyTorch. | Björklund, Mäkelä & Puolamäki 2023 |
 
 Defaults are derived from *n*, not copied from the papers: the published
 perplexity and neighbour counts were chosen for tens of thousands of points, and
@@ -156,6 +168,12 @@ section.
 > fitted on everything, and **out-of-fold**, with each sample placed by axes
 > fitted without it. In-sample separation with out-of-fold collapse is the honest
 > picture of "no". See Cardini & Polly (2020) for the cross-validated form.
+>
+> Two methods cannot be drawn out-of-fold at all, and say so on the panel rather
+> than being quietly exempted. SLISEMAP places a point by finding the local model
+> that explains it, which needs that point's own label — so a held-out point
+> could only be placed by handing the method the answer. Read every SLISEMAP
+> figure as in-sample.
 
 ### How much of a projection to believe
 
@@ -663,12 +681,21 @@ translation, or if Chinese reaches a figure.
 * Read [`AUDIT.md`](AUDIT.md) before comparing new numbers against v1.2 output —
   several v1.2 statistics were wrong in ways that can change conclusions,
   particularly the angle averages and the NaN handling.
+* **Parallelism on Windows.** The desktop app runs on `python.exe`, not
+  `pythonw.exe`. `pythonw` has no console window, which is tidier, but `loky`
+  worker processes cannot start under it: an analysis dies part-way through the
+  permutation test with a `TerminatedWorkerError` that blames segmentation
+  faults and memory, minutes after the expensive part finished. Pointing
+  `sys.executable`, `multiprocessing` and loky's own `_python_exe` at
+  `python.exe` does not fix it, and nor does repairing the stdio handles — all
+  three were tried and measured. The console window is started minimised and
+  hidden by the app where it can be. If you do launch under `pythonw` some
+  other way, SOMTrack switches multi-core work off rather than letting the run
+  fail: same answers, slower.
 * **Still to come.** PCC (arXiv:2503.07609) is the one method from the 3.0 plan
   that is not here: it has no published package yet, and reimplementing a 2025
   paper from its abstract is not something to put behind a figure a reviewer
   will read. It is a one-file addition once a package appears.
-  SLISEMAP is registered but needs `pip install slisemap`, which pulls in
-  PyTorch; it is off the default install for that reason.
 * [`ROADMAP.md`](ROADMAP.md) has the design reasoning behind 3.0.
 
 ---

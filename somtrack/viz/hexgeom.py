@@ -70,6 +70,64 @@ def set_map_limits(ax, centres: np.ndarray, pad: float = 0.9) -> None:
     ax.set_axis_off()
 
 
+def fit_scale(d1: np.ndarray, lo_q: float = 0.05,
+              hi_q: float = 0.95) -> tuple[float, float]:
+    """The range of quantisation errors that the hexagon's radius spans.
+
+    Returned as ``(best, worst)``.  Robust quantiles rather than the extremes,
+    so one badly-fitting sample cannot squash every other point into the middle.
+
+    A single upper bound is not enough.  In fifty dimensions every sample sits
+    some distance from its codebook vector, so the *smallest* quantisation error
+    on a real map is nowhere near zero -- scaling by an upper bound alone leaves
+    the inner third of every hexagon permanently empty.  Stretching the observed
+    range across the radius is what makes the difference between a well-fitting
+    and a poorly-fitting sample visible.
+    """
+    d1 = np.asarray(d1, float)
+    d1 = d1[np.isfinite(d1)]
+    if d1.size == 0:
+        return 0.0, 1.0
+    lo = float(np.quantile(d1, lo_q))
+    hi = float(np.quantile(d1, hi_q))
+    if hi - lo <= 1e-12:                       # every sample fits equally well
+        hi = float(max(d1.max(), lo + 1e-12))
+    return lo, hi
+
+
+def fit_fraction(d1: np.ndarray,
+                 scale: tuple[float, float] | None = None) -> np.ndarray:
+    """Radial position of a sample inside its hexagon, from 0 (centre) to 1 (rim).
+
+    0 means the sample *is* its node's codebook vector; 1 means it fits as
+    poorly as the worst few samples on the map.
+
+    Two earlier attempts at this are worth recording, because both are wrong in
+    ways that look reasonable:
+
+    ``d1 / d2`` (v1.2, inherited by 2.0) cannot work.  The winner is by
+    definition the nearest node, and two neighbouring codebook vectors are close
+    together relative to their distance from any sample, so the ratio sits just
+    below 1 for nearly every sample and every point is drawn hard against the
+    edge of its hexagon.  That is the bug this replaces.
+
+    Projecting onto the line between the two codebook vectors -- geometrically
+    exact, with the Voronoi boundary at the rim -- fails the other way.  In
+    fifty dimensions almost all of a sample's distance from its node is
+    *perpendicular* to that line, so the projection throws away the part that
+    matters and collapses every point into the centre.
+
+    What is left, and what the radius now shows, is the quantisation error
+    itself: how far the sample is from the node it was assigned to.
+    """
+    d1 = np.asarray(d1, float)
+    lo, hi = fit_scale(d1) if scale is None else scale
+    span = hi - lo
+    if span <= 1e-12:
+        return np.zeros_like(d1)
+    return np.clip(np.nan_to_num((d1 - lo) / span, nan=0.0), 0.0, 1.0)
+
+
 def sample_positions(
     bmu: np.ndarray,
     bmu2: np.ndarray,
@@ -79,21 +137,33 @@ def sample_positions(
     jitter: np.ndarray | None = None,
     jitter_strength: float = 0.20,
     radius: float = HEX_RADIUS,
+    scale: float | None = None,
 ) -> np.ndarray:
     """Where to draw each sample inside its winning hexagon.
 
-    Ported from the macro: a sample sits at its best-matching node, displaced
-    towards its second-best node by ``d1 / d2``.  A sample that fits its node
-    far better than any other sits at the centre; an ambiguous one drifts to the
-    border it shares with its runner-up, which makes boundary cases visible.
+    Two independent things are encoded, which is what makes the map readable:
+
+    *distance from the centre* is how well the sample matches its node.  A
+    sample equal to the codebook vector sits dead centre; one of the worst-
+    fitting samples on the map sits on the rim.
+
+    *bearing* is which neighbouring node the sample leans towards -- the
+    direction of its runner-up.  So a cluster of points pressed against one
+    edge is a group that the map has split across two nodes.
+
+    ``scale`` fixes the distance that counts as a poor fit.  Pass the same value
+    for every frame of an animation and the points converge inwards as the map
+    learns, which is the thing worth watching; leave it out and each frame is
+    scaled to itself, which hides exactly that.
 
     The angular jitter is drawn once per sample and reused for every frame, so
-    points no longer twitch between animation frames as they did in v1.2.
+    points do not twitch between animation frames as they did in v1.2.
     """
     c1 = centres[bmu]
     c2 = centres[bmu2]
-    with np.errstate(divide="ignore", invalid="ignore"):
-        frac = np.clip(np.nan_to_num(d1 / np.where(d2 > 0, d2, np.nan), nan=0.0), 0.0, 1.0)
+
+    frac = fit_fraction(d1, scale)
+
     ang = np.arctan2(c2[:, 1] - c1[:, 1], c2[:, 0] - c1[:, 0])
     if jitter is not None:
         ang = ang + (jitter - 0.5) * jitter_strength * 2.0
@@ -142,4 +212,5 @@ def cluster_outline(ax, centres: np.ndarray, member: np.ndarray, color,
 __all__ = [
     "HEX_RADIUS", "ROW_PITCH", "node_centres", "draw_hexes", "set_map_limits",
     "sample_positions", "stable_jitter", "cluster_outline", "hex_patches",
+    "fit_fraction", "fit_scale",
 ]

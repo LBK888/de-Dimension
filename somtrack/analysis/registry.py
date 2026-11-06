@@ -141,6 +141,11 @@ class MethodSpec:
     summary: str = ""               # one line for the method picker
     detail: str = ""                # methods-section clause
     caveat: str = ""                # printed on every figure; required if supervised
+    # Empty when the method can be drawn out-of-fold.  Otherwise this says why
+    # it cannot, and the text is appended to the caveat: a supervised method
+    # with no honest validation panel needs a *stronger* warning than one that
+    # has it, not a quiet exemption.
+    no_out_of_fold_reason: str = ""
     min_samples: int = 3
 
     def __post_init__(self) -> None:
@@ -150,6 +155,26 @@ class MethodSpec:
                 f"projection separates groups by construction, and the figure has to "
                 f"say so."
             )
+        if self.no_out_of_fold_reason and not self.supervised:
+            raise ValueError(
+                f"'{self.key}' is unsupervised, so an out-of-fold panel is not "
+                f"something it needs to explain away."
+            )
+
+    @property
+    def supports_out_of_fold(self) -> bool:
+        return not self.no_out_of_fold_reason
+
+    @property
+    def full_caveat(self) -> str:
+        # Two sentences joined as Text, so each is still found in the
+        # translation catalogue; a pre-joined string would not be.
+        if self.no_out_of_fold_reason:
+            from ..i18n import join_sentences
+
+            return join_sentences([Text(self.caveat),
+                                   Text(self.no_out_of_fold_reason)])
+        return self.caveat
 
     # ------------------------------------------------------------------
     def param(self, name: str) -> ParamSpec | None:
@@ -265,7 +290,7 @@ def run_method(key: str, ctx: DataContext,
         params=params,
         supervised=spec.supervised,
         citations=tuple(res.citations) or spec.citations,
-        caveat=res.caveat or spec.caveat,
+        caveat=res.caveat or spec.full_caveat,
     )
 
 

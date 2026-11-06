@@ -20,6 +20,14 @@ phate>=1.0            # PHATE: for dose / time / developmental gradients
 glasbey>=0.2          # maximally distinct categorical colours above ten groups
 cmcrameri>=1.7        # Crameri's perceptually uniform scientific colour maps
 
+# SLISEMAP needs PyTorch, which is by far the largest thing here (a CUDA
+# build is ~3 GB, the CPU build ~250 MB).  install.bat runs
+# tools/install_torch.py, which picks the build that matches the GPU and
+# driver actually present -- a mismatched CUDA build installs and imports
+# cleanly, then fails the first time it touches the GPU.
+#   slisemap>=1.6         # supervised DR by local explanations
+#   torch>=2.0            # install via tools/install_torch.py, not plain pip
+
 # optional performance and geometry
 numba>=0.58           # JIT for the online SOM on very large data sets
 shapely>=2.0          # smooth merged outlines for node clusters

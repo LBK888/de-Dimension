@@ -13,8 +13,13 @@ MESSAGES: dict[str, str] = {
     # ======================================================================
     # Main window
     # ======================================================================
-    "SOMTrack 3.0 - locomotion metrics, multivariate analysis and publication figures":
-        "SOMTrack 3.0 － 運動指標、多變量分析與出版級圖表",
+    "SOMTrack {version} - locomotion metrics, multivariate analysis and publication "
+    "figures":
+        "SOMTrack {version} － 運動指標、多變量分析與出版級圖表",
+    "multivariate analysis": "多變量分析",
+    "running under pythonw.exe, which cannot start worker processes, so the "
+    "analysis is using one core":
+        "目前以 pythonw.exe 執行，無法啟動工作行程，因此分析只使用單一核心",
     "locomotion SOM": "運動行為 SOM",
     "1  Data source": "1  資料來源",
     "2  Metrics": "2  指標",
@@ -1660,6 +1665,19 @@ MESSAGES: dict[str, str] = {
     "range is picked automatically.":
         "要嘗試的最少與最多群集數。會自動從此範圍中選出最佳的群集數。",
     "Rarely needed. The defaults suit most data.": "很少需要調整。預設值適用於大多數資料。",
+
+    # supervised projections that cannot be drawn out-of-fold
+    "This build does not draw the out-of-fold panel for supervised UMAP, so the "
+    "cross-validated score below is the only validation shown.":
+        "此版本不會為監督式 UMAP 繪製折外（out-of-fold）圖，"
+        "因此下方的交叉驗證分數是唯一呈現的驗證。",
+    "There is no out-of-fold version of this panel: SLISEMAP places a point by "
+    "finding the local model that explains it, which requires that point's own "
+    "label, so a held-out point could only be placed by handing the method the "
+    "answer. Treat every SLISEMAP figure as in-sample.":
+        "此圖沒有折外版本：SLISEMAP 是藉由找出能解釋某個點的局部模型來放置該點，"
+        "這需要用到該點自己的標籤；保留的點只能在把答案交給方法的情況下才能放置。"
+        "請將所有 SLISEMAP 圖都視為樣本內（in-sample）結果。",
 
     # 6. compare
     "The method to run over a range of its settings.": "要在一系列參數設定下執行的方法。",

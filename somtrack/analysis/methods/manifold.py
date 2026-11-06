@@ -11,6 +11,8 @@ and the value actually used is recorded in the methods section.
 
 from __future__ import annotations
 
+import contextlib
+import logging
 import warnings
 
 import numpy as np
@@ -23,6 +25,29 @@ NONLINEAR_CAVEAT = ("Distances between well-separated clusters are not meaningfu
 
 
 # --------------------------------------------------------------------------
+@contextlib.contextmanager
+def _quiet(*loggers: str):
+    """Silence a library's own logging for the duration of one call.
+
+    PaCMAP logs "Warning: random state is set to 0." on every run, because
+    fixing the seed makes it single-threaded.  That is a deliberate choice here
+    -- a run has to be reproducible, and the seed is recorded in the methods
+    section -- so the message is noise on somebody's terminal, once per figure.
+    Scoped to the call rather than set globally: a library's logging is not
+    ours to switch off for the rest of the process.
+    """
+    saved = []
+    for name in loggers:
+        log = logging.getLogger(name)
+        saved.append((log, log.level))
+        log.setLevel(logging.ERROR)
+    try:
+        yield
+    finally:
+        for log, level in saved:
+            log.setLevel(level)
+
+
 def _suggest_perplexity(ctx: DataContext) -> float:
     """Small n needs a small perplexity: it must stay below (n - 1) / 3."""
     n = ctx.n_samples
@@ -173,7 +198,7 @@ def _run_pacmap(ctx: DataContext, p: dict) -> ProjectionResult:
 
     n = ctx.n_samples
     nn = int(min(int(p["n_neighbors"]), max(2, n - 1)))
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(), _quiet("pacmap"):
         warnings.simplefilter("ignore")
         reducer = pacmap.PaCMAP(
             n_components=2, n_neighbors=nn,

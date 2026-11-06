@@ -51,8 +51,9 @@ STEP_HELP = [
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(tr("SOMTrack 3.0 - locomotion metrics, multivariate "
-                               "analysis and publication figures"))
+        self.setWindowTitle(tr("SOMTrack {version} - locomotion metrics, "
+                               "multivariate analysis and publication "
+                               "figures").format(version=__version__))
         self.resize(1360, 900)
 
         self.state = AppState()
@@ -111,8 +112,8 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(12, 16, 12, 12)
 
         lay.addWidget(styled(heading("SOMTrack", 17), "brand"))
-        lay.addWidget(styled(QLabel(f"v{__version__}  ·  " + tr("locomotion SOM")),
-                             "hint"))
+        lay.addWidget(styled(QLabel(f"v{__version__}  ·  "
+                                    + tr("multivariate analysis")), "hint"))
         lay.addSpacing(14)
 
         self.steps = QListWidget()

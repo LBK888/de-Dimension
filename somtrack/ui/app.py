@@ -22,6 +22,15 @@ def main(argv: list[str] | None = None) -> int:
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
 
+    from ..parallel import ensure_spawnable, hide_console
+
+    # The launcher runs python.exe, not pythonw.exe: loky worker processes die
+    # under pythonw, which used to end the run in the middle of the permutation
+    # test, long after the expensive part was done.  The console that comes
+    # with python.exe is hidden here instead, so the app still opens on its own.
+    hide_console()
+    note = ensure_spawnable()
+
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeMenuBar, False)
     app = QApplication(argv if argv is not None else sys.argv)
     app.setApplicationName("SOMTrack")
@@ -41,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
     from .main_window import MainWindow
 
     window = MainWindow()
+    if note:
+        window.log.log(note, "info")
     window.show()
     return app.exec()
 

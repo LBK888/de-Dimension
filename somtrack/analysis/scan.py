@@ -130,8 +130,7 @@ def scan(
     progress=None,
 ) -> ScanResult:
     """Run one method over a parameter grid and score every cell."""
-    from joblib import Parallel, delayed
-
+    from ..parallel import parallel_map
     from . import evaluate
 
     spec = get(method)
@@ -168,10 +167,8 @@ def scan(
 
     if progress:
         progress(0, len(combos))
-    out = Parallel(n_jobs=n_jobs, prefer="processes")(
-        delayed(one)(c) for c in combos)
-    if progress:
-        progress(len(combos), len(combos))
+    out = parallel_map(one, combos, n_jobs=n_jobs,
+                       desc=f"the {spec.label} scan", progress=progress)
 
     rows, coords = [], {}
     for params, xy, row in out:

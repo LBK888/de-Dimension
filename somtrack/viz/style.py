@@ -134,6 +134,14 @@ def apply_style(cfg: FigureConfig) -> None:
         "savefig.bbox": None,          # explicit layout; never crop our reserved strips
         "savefig.dpi": cfg.dpi_png,
         "figure.dpi": 110,
+
+        # A full report holds forty-odd figures open at once on purpose: the
+        # whole set is handed to the gallery and written to one multi-page PDF
+        # before anything is closed.  The default limit of 20 therefore fires
+        # on every normal run.  Raising it rather than disabling it keeps the
+        # warning useful as a leak detector, which is how the leak in
+        # build_figures was found.
+        "figure.max_open_warning": 120,
     })
 
 
